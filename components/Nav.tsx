@@ -1,4 +1,5 @@
 import Link from "next/link";
+import DarkMode from "./darkmode";
 
 function Nav() {
   return (
@@ -8,6 +9,7 @@ function Nav() {
       <Link href="/post">Post</Link>
       <Link href="/about">About</Link>
       <Link href="/signin">Sign in</Link>
+      <DarkMode />
     </nav>
   );
 }
