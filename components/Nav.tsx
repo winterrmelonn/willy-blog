@@ -8,6 +8,7 @@ function Nav() {
       <Link href="/" className={box}>Home</Link>
       <Link href="/blogs" className={box}>Blogs</Link>
       <Link href="/post" className={box}>Post</Link>
+      <Link href="/calendar" className={box}>Calendar</Link>
       <Link href="/about" className={box}>About</Link>
       <Link href="/signin" className={box}>Sign in</Link>
       <DarkMode />
