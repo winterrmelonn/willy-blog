@@ -1,24 +1,31 @@
 "use client";
-import { useLayoutEffect } from "react";
+import { useLayoutEffect, useSyncExternalStore } from "react";
 
-function DarkMode() {
-    const box = "border border-zinc-200 dark:border-zinc-800 rounded-lg px-4 py-1.5 text-sm bg-white/70 dark:bg-black/50 backdrop-blur"
-    useLayoutEffect(() => {
-        const darkMode = localStorage.getItem("darkMode");
-        if (darkMode === "true") {
-            document.documentElement.classList.add("dark");
-        } else {
-            document.documentElement.classList.remove("dark");
-        }
-    }, []);
-    function toggleDarkMode() {
-        document.documentElement.classList.toggle("dark");
-        const isDarkMode = document.documentElement.classList.contains("dark");
-        localStorage.setItem("darkMode", isDarkMode ? "true" : "false");
-    }
-    return (
-        <button className={box} onClick={toggleDarkMode}>Theme</button>
-    )
+// Dark mode = the "dark" class on <html>, remembered in localStorage under "darkMode".
+// (app/layout.tsx applies it before the page paints, so there's no flash.)
+
+const html = () => document.documentElement;
+
+// re-render whenever the class on <html> changes
+function subscribe(onChange: () => void) {
+    const observer = new MutationObserver(onChange);
+    observer.observe(html(), { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
 }
 
-export default DarkMode;
+export function setDarkMode(dark: boolean) {
+    html().classList.toggle("dark", dark);
+    try {
+        localStorage.setItem("darkMode", dark ? "true" : "false");
+    } catch {}
+}
+
+export function useDarkMode() {
+    // React Strict Mode resets <html> attributes in dev, so re-apply the saved choice after mounting
+    useLayoutEffect(() => {
+        try {
+            html().classList.toggle("dark", localStorage.getItem("darkMode") === "true");
+        } catch {}
+    }, []);
+    return useSyncExternalStore(subscribe, () => html().classList.contains("dark"), () => false);
+}

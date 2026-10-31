@@ -10,6 +10,8 @@ export async function initAuth() {
     const instance = betterAuth({
         database: mongodbAdapter(client.db()),
         emailAndPassword: { enabled: true },
+        // stay signed in on this browser for 30 days, renewed whenever you visit
+        session: { expiresIn: 60 * 60 * 24 * 30, updateAge: 60 * 60 * 24 },
 });
     
         return instance;

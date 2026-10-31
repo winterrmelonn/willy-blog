@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Lastik font: licensed, must not be on public GitHub (scripts/font.mjs restores it on Vercel)
+/app/fonts/

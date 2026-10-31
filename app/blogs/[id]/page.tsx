@@ -13,7 +13,8 @@ async function Page({ params }: { params: Promise<{ id: string }> }) {
     <div>
       <h1>{post.title}</h1>
       <div>{post.date.toLocaleDateString()}</div>
-      <div>
+      {/* keep the line breaks and spaces as typed (HTML squashes them into one space otherwise) */}
+      <div className="whitespace-pre-wrap">
         {post.content.map((paragraph, i) => (
           <p key={i}>{paragraph}</p>
         ))}

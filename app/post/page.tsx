@@ -12,10 +12,12 @@ async function Page() {
     if (!session || !ADMIN_EMAILS.includes(session.user.email)) redirect("/");
 
     return(
-        <div>
-            <h1>Create Blog</h1>
-            <PostForm postBlog={postBlog} />
-        </div>
+        <main>
+            <div className="max-w-2xl mx-auto">
+                <h1 className="mt-3 text-4xl font-bold">New post</h1>
+                <PostForm postBlog={postBlog} />
+            </div>
+        </main>
     );
 }
 

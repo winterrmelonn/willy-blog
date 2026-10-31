@@ -9,7 +9,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-lastik), Arial, Helvetica, sans-serif;
   --font-mono: var(--font-geist-mono);
 }
 
@@ -21,5 +21,56 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-lastik), Arial, Helvetica, sans-serif; /* the Lily UI links set their own serif */
+}
+
+/* Lily UI links (components/LilyGarden.tsx), ported from the comp project's lily.css.
+   Narrow screens: a list. Wide screens: LilyGarden places each link beside its own lily (data-side),
+   gives it a round hover area over that flower (--cx, --cy, --r), moves it with the sway (--sx, --sy),
+   and sets --bloom (0..1) on hover in step with the flower opening. */
+.lily-nav { display: grid; gap: 24px; max-width: 760px; margin: 0 auto; padding: 64px 24px; align-content: start; }
+.lily-nav > a {
+  justify-self: start; position: relative; z-index: 1; padding: 3px 12px; border-radius: 6px;
+  font-size: 1.75rem; line-height: 1.1; text-decoration: none;
+  background: rgb(255 255 255 / .55); backdrop-filter: blur(6px);
+  transform-origin: 0 100%; transition: transform .6s cubic-bezier(.22, .61, .36, 1);
+}
+.dark .lily-nav > a { background: rgb(0 0 0 / .45); }
+/* font-style can't be animated, so the hover is a skew that eases into an italic-like slant */
+.lily-nav > a:hover, .lily-nav > a:focus-visible { transform: skewX(-10deg); }
+@media (min-width: 720px) {
+  .lily-nav > a { font-size: 2.5rem; }
+  .lily-nav > a[data-side] {
+    position: fixed; font-size: 1.3rem; white-space: nowrap;
+    transform-origin: 0 0; transition: none;
+    transform: translate(var(--sx, 0px), var(--sy, 0px)) scale(calc(1 + 0.08 * var(--bloom, 0)));
+  }
+  .lily-nav > a[data-side]::before {
+    content: ''; position: absolute; border-radius: 50%;
+    left: calc(var(--cx, 0px) - var(--r, 0px)); top: calc(var(--cy, 0px) - var(--r, 0px));
+    width: calc(2 * var(--r, 0px)); height: calc(2 * var(--r, 0px));
+  }
+  .lily-nav > a[data-side='left'] { transform-origin: 100% 0; }
+  .lily-nav > a[data-side='left']::before { left: auto; right: calc(-1 * (var(--cx, 0px) + var(--r, 0px))); }
+  .lily-nav > a:focus-visible { outline: none; text-decoration: underline; }
+}
+@media (prefers-reduced-motion: reduce) { .lily-nav > a { transition: none; } }
+
+/* Calendar months (app/calendar/page.tsx), using the browser's view transitions: the old month leaves
+   quickly toward one side while the new one glides in from the other, slightly after, with a soft blur. */
+::view-transition { pointer-events: none; } /* clicks still reach the page mid-animation */
+::view-transition-old(.month-next), ::view-transition-old(.month-prev) {
+  animation: 180ms ease-in both month-fade reverse, 420ms cubic-bezier(.4, 0, .2, 1) both month-slide reverse;
+}
+::view-transition-new(.month-next), ::view-transition-new(.month-prev) {
+  animation: 260ms ease-out 120ms both month-fade, 420ms cubic-bezier(.4, 0, .2, 1) both month-slide;
+}
+::view-transition-old(.month-next) { --month-shift: -48px; }
+::view-transition-new(.month-next) { --month-shift: 48px; }
+::view-transition-old(.month-prev) { --month-shift: 48px; }
+::view-transition-new(.month-prev) { --month-shift: -48px; }
+@keyframes month-fade { from { opacity: 0; filter: blur(3px); } }
+@keyframes month-slide { from { translate: var(--month-shift); } }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(*), ::view-transition-new(*), ::view-transition-group(*) { animation-duration: 0s !important; animation-delay: 0s !important; }
 }

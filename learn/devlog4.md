@@ -21,3 +21,5 @@ FINALLY started to move away from this 3D stuff and back to the website stuff. S
 Finally fixed the buttoms having a green background. (simple fix, just added bg-white/70 dark:bg-black/50 backdrop-blur to the div className)
 
 Working on making the blog part of the website actually functional. Quick fix: changed "content" in PostModel.ts from String to [String] so that the blog can be a list of strings and not just one. Made a quick security fix by making the function that posts the blog verify authenthication.
+
+Pushed everything done up til now.
