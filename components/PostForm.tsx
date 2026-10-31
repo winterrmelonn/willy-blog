@@ -2,13 +2,14 @@
 
 import type { PostType } from "@/app/post/actions";
 import { useState } from "react";
-import { redirect } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 function PostForm({
     postBlog,
 }: {
     postBlog: (post: PostType) => Promise<void>;
 }) {
+    const router = useRouter();
     const [newPost, setNewPost] = useState<PostType>({
         id: crypto.randomUUID(),
         date: new Date(),
@@ -19,7 +20,7 @@ function PostForm({
 async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     await postBlog(newPost);
-    redirect("/blogs/" + newPost.id);
+    router.push("/blogs/" + newPost.id);
 }
 
 return (

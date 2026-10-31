@@ -27,8 +27,13 @@ function Page() {
                 { ...user },
                 { onSuccess: () => router.push("/") },
             );
-        }
-    }
+        }else {
+            await authClient.signIn.email(
+                { email: user.email, password: user.password },
+                { onSuccess: () => router.push("/post") },
+            );
+        };
+    } 
     return (
         <form onSubmit={handleSignIn}>
             <h1>Sign In</h1>
@@ -61,6 +66,6 @@ function Page() {
             <button type="submit">Submit</button>
         </form>
     );
-}
+} 
 
 export default Page;

@@ -1,20 +1,20 @@
 
+import { initAuth, ADMIN_EMAILS } from "@/lib/auth";
+import { headers } from "next/headers";
 import { postBlog } from "./actions";
-  import { initAuth } from "@/lib/auth";
-  import { headers } from "next/headers";
-  import { redirect } from "next/navigation";
-  import PostFrom from "@/components/PostForm";
+import { redirect } from "next/navigation";
+import PostForm from "@/components/PostForm";
 
 async function Page() {
     const auth = await initAuth();
     const session = await auth.api.getSession({ headers: await headers() });
     // replace w/ own email address
-    if (!session || session.user.email !== "asherwandenreich@gmail.com") redirect("/");
+    if (!session || !ADMIN_EMAILS.includes(session.user.email)) redirect("/");
 
     return(
         <div>
             <h1>Create Blog</h1>
-            <PostFrom postBlog={postBlog} />
+            <PostForm postBlog={postBlog} />
         </div>
     );
 }

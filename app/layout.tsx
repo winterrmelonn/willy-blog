@@ -22,9 +22,19 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
-      lang="en"
+      lang="en" suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+    <head>
+      <script dangerouslySetInnerHTML={{__html: `
+        try {
+          const darkMode = localStorage.getItem("darkMode");
+          if (darkMode === "true") {
+              document.documentElement.classList.add("dark");
+          }          
+      } catch (e) {}
+        `}} />
+    </head>
       <body className="min-h-full flex flex-col">
         <Nav />
         {children}

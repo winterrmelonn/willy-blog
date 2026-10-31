@@ -22,4 +22,4 @@ gap-2 - gap 8 px
 add letters for direction: x (left/right), y (top/bottom), t (top), b (bottom), l, r 
 ex: mt-4 (margin, top, 16px)
 
-colors go from 50-950 (lightest - darkest)
+colors go from 50-950 (lightest - darkest).

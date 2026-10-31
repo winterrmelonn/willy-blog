@@ -1,16 +1,27 @@
 import Link from "next/link";
+import SpiderLilyModel from "@/components/SpiderLilyModel";
+import LilyBackground from "@/components/LilyBackground";
+// import SpiderLily from "@/components/SpiderLily";
 
 export default function Home() {
   return (<main>
-    <div className="max-w-2xl mx-auto">
+    <div className="flex items-center gap-4 max-w-2xl mx-auto">
           <h1 className="mt-3 text-4xl font-bold">
-          Hi, I&rsquo;m Will.
+          willy.work
         </h1>
-          <p className="my-3 leading-relaxed text-zinc-900 dark:text-zinc-100">
-            I&rsquo;m currently a senior in high school. I hope to study an engineering field at any UC that&rsquo;ll take me. I would love to do either Aerospace Engineering or Bioengineering, at UCLA and UCSD respectively. All engineering majors need to know how to code, so I&rsquo;ve gotten wrapped up in Hack Club and its community recently. I have high hopes for my first real project: this blog.
-        </p>
+          {/* <p className="my-3 leading-relaxed text-zinc-900 dark:text-zinc-100"> */}
+            {/* hi */}
+        {/* </p> */}
           <Link href="/blogs" className="inline-block rounded-full px-5 py-2 bg-black dark:bg-white text-white dark:text-black hover:opacity-80">My Blogs</Link>
+          {/* <div className="fixed inset-0 -z-10"> */}
+            {/* <SpiderLilyModel /> */}
+            {/* </div> */}
+<LilyBackground />
+            <p className="fixed inset bottom-4 inset right-4 text-[0.75rem] text-zinc-400 dark:text-zinc-700">
+            &ldquo;Spider Lily (Lycoris Radiata)&rdquo; <a href="https://skfb.ly/oJJBW" target="_blank">(Spider Lily)</a> by Osian CG is licensed under Creative Commons Attribution <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" >(CC BY 4.0)</a>
+            </p>
     </div>
   </main>
 );
 }
+

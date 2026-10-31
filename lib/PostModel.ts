@@ -2,6 +2,10 @@ import { Schema, model, models } from "mongoose";
 
 const PostSchema = new Schema(
     {
+        title: {
+            type: String,
+            required: true,
+        },
         id: {
             type: String,
             required: true,
@@ -11,7 +15,7 @@ const PostSchema = new Schema(
             required: true,
         },
         content: {
-            type: String,
+            type: [String],
             required: true,
         },
     },
