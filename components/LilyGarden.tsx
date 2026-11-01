@@ -81,6 +81,7 @@ const HALO = new THREE.SpriteMaterial({ transparent: true, depthWrite: false, op
 
 // Dark mode: the lilies glow a soft red to light the scene.
 function setGlow(dark: boolean) {
+    MATERIALS.stem.color.set(dark ? "#2e3a22" : "#4b5e38"); // a lighter green on the white page
     MATERIALS.petal.emissiveIntensity = dark ? 0.22 : 0;
     MATERIALS.stamen.emissiveIntensity = dark ? 0.3 : 0;
     HALO.opacity = dark ? 1 : 0;
@@ -192,6 +193,7 @@ function Lily({ seed, x, y, z, index, links, hover }: LilySpot & Shared) {
         // this flower has its own copies of the materials, so follow the dark-mode glow too
         if (petal) petal.emissiveIntensity = MATERIALS.petal.emissiveIntensity + p * 0.35;
         if (stamen) stamen.emissiveIntensity = MATERIALS.stamen.emissiveIntensity;
+        (meshes.current.stem?.material as THREE.MeshStandardMaterial | undefined)?.color.copy(MATERIALS.stem.color);
         link.style.setProperty("--bloom", p.toFixed(3));
 
         // Let the link ride along as the flower head sways: on-screen offset from its resting spot

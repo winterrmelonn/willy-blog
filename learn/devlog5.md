@@ -22,4 +22,10 @@ Tested posting a real blog post, recieved an auth error. Fixed that error, poste
 
 Added a red glow behind only the flowers for lily ui dark mode. Deleted the black "my blogs" button from the tutorial, made a few formatting changes with the willy.work title text, and browsed freefaces and swithced to Lastik.
 
-Expanded the profile page heavily. Added a "send a message" tab and a "contribute a blog" tab and redid the UI formatting to have the page/button selection on the left and then the page displayed on the right. 
+Expanded the profile page heavily. Added a "send a message" tab and a "contribute a blog" tab and redid the UI formatting to have the page/button selection on the left and then the page displayed on the right. On the admin page there's also a button to review contribution requests and an edit feature for the about page.
+
+Fixed the edit button being too close to the "My Blogs" button on the about page and imported a river visual I used in my aquaplot project for the about page. Added more detail (trees, better grass, basic koi fish) but it's... mediocre so I'll probably make my own 3D model or download another one off of Sketchfab like I did for the lillies tomorrow. 
+
+Added Lastik as an environment variable because the licensing doesn't allow for it to be published in a github repo.
+
+Downloaded a licensed 3D model of a koi fish and imported that in the river. Replaced this random bump in the middle of the river for a nice red wooden bridge, and changed the background trees to have color/shape variation and more detail.

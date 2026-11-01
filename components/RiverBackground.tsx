@@ -5,14 +5,19 @@
 // the middle, with pebbles and caustics on the bed, boulders the current foams around, reeds on the banks
 // and leaves riding the surface, seen from low down looking upstream. AquaPlot also flew the camera down
 // the page as you scrolled and bent the river round its text; this page is short, so only the opening
-// view came over. Decorative: if WebGL is missing the soft gradient behind the canvas stays.
+// view came over. Restyled after a Chinese mountain stream: jade water, mossy boulders, bonsai-like
+// trees, stone lanterns and a red pavilion upstream in the mist.
+// Decorative: if WebGL is missing the soft gradient behind the canvas stays.
 
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { useDarkMode } from "./darkmode";
 
 const LEN = 140; // length of the stretch of world kept around the camera
 const ROCKS = 14;
+const BRIDGE_Z = -0.5; // where the red bridge crosses, just ahead of the camera
 const f = (v: number) => v.toFixed(5);
 
 // The river's centre and half-width at z (the shaders' river() below is the same curve)
@@ -181,13 +186,9 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement) {
           bed = mix(bed, uDeep, smoothstep(0.0, 1.0, depth) * 0.6);
           if (depth > 0.05) bed += uCaustic * caustic(p * 0.3 - vec2(0.0, uTime * 0.09), uTime * 0.45) * 0.32 * smoothstep(0.05, 0.4, depth);
         }
-        if (h > -0.03) {  // wet earth and stones at the edge, then grass with the odd flower
+        if (h > -0.03) {  // wet earth and stones at the edge, then grass
           float g = fbm(p * 0.8);
           vec3 grass = mix(uGrassA, uGrassB, g) * (0.82 + 0.22 * vnoise(p * 7.0) + 0.14 * vnoise(vec2(p.x * 40.0, p.y * 9.0)));
-          vec2 cell = floor(p * 14.0); float kind = hash1(cell + 7.0);
-          vec3 bloom = kind < 0.4 ? uFlower : kind < 0.7 ? vec3(0.95, 0.72, 0.16) : vec3(0.62, 0.45, 0.85);
-          float dot1 = 1.0 - smoothstep(0.18, 0.32, length(fract(p * 14.0) - 0.5));
-          grass = mix(grass, bloom * mix(1.0, 0.3, uNight), step(0.975, hash1(cell)) * dot1 * 0.9);
           bank = mix(mix(uEarth, stone, pebble * 0.7), grass, smoothstep(0.1, 0.32, h + (g - 0.5) * 0.3));
           bank *= mix(0.7, 1.0, smoothstep(0.0, 0.16, h));
           bank *= 0.66 + 0.44 * max(dot(normalize(vN), uLight), 0.0);
@@ -356,8 +357,8 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement) {
         t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
         return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     })(20260930);
-    world.add(new THREE.HemisphereLight(0xffffff, 0x445544, 1.4));
-    const sunLight = new THREE.DirectionalLight(0xffffff, 1.6);
+    world.add(new THREE.HemisphereLight(0xffffff, 0x445544, 1.0));
+    const sunLight = new THREE.DirectionalLight(0xffffff, 1.1);
     sunLight.position.copy(uniforms.uLight.value).multiplyScalar(10);
     world.add(sunLight);
     const rockMat = new THREE.ShaderMaterial({
@@ -368,11 +369,15 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement) {
         vWorld = w.xyz; vColor = color;
         gl_Position = projectionMatrix * viewMatrix * w;
       }`,
-        fragmentShader: `uniform vec3 uRock, uDeep, uShallow, uFog, uLight; varying vec3 vWorld; varying vec3 vColor;
+        fragmentShader: `uniform vec3 uRock, uDeep, uShallow, uFog, uLight, uGrassA; varying vec3 vWorld; varying vec3 vColor;
       ${COMMON} ${FADE}
       void main() {
         vec3 n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));  // faceted, like cut stone
-        vec3 col = uRock * vColor * (0.45 + 0.75 * max(dot(n, uLight), 0.0) + 0.15 * max(n.y, 0.0));
+        float lit = 0.45 + 0.75 * max(dot(n, uLight), 0.0) + 0.15 * max(n.y, 0.0);
+        vec3 col = uRock * vColor * lit;
+        // thick moss on the upward faces, patchy
+        float moss = smoothstep(0.25, 0.7, n.y) * smoothstep(0.3, 0.6, vnoise(vWorld.xz * 2.5) + 0.25 * n.y);
+        col = mix(col, uGrassA * 1.25 * lit, moss * 0.9);
         col = mix(col, mix(uShallow, uDeep, 0.6), smoothstep(0.0, 0.4, -vWorld.y) * 0.85);
         gl_FragColor = vec4(mix(col, uFog, fadeAt(vWorld)), 1.0);
         #include <colorspace_fragment>
@@ -403,6 +408,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement) {
         const breaks = top > 0;
         let z = -30 + ((i + rng() * 0.8) / ROCKS) * 48;
         if (z > 0 && z < 12) z -= 14; // none right under the camera, where one fills the view
+        if (Math.abs(z - BRIDGE_Z) < 2.5) z -= 5; // nor under the bridge
         const [cx, w] = river(z), k = Math.min(1.1, w / 3), x = cx + (rng() * 2 - 1) * 0.72 * w;
         mesh.scale.set(sx * k, sy * k, sz * k);
         mesh.position.set(x, yc * k, z);
@@ -410,104 +416,356 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement) {
         world.add(mesh);
     }
 
-    // ---- trees along the banks, fading into the haze upstream: a trunk and two lumps of leaves each
-    const TREES = small ? 36 : 64;
-    const trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.05, 0.09, 1, 5).translate(0, 0.5, 0),
-        new THREE.MeshLambertMaterial({ color: "#5a4632" }), TREES);
-    const crowns = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1),
-        new THREE.MeshLambertMaterial({ flatShading: true }), TREES * 2);
-    const crownColors = ["#5f8a46", "#6f9a4e", "#4f7a3e", "#86a352", "#a69a48", "#6a8f5a"];
-    const crownBase: THREE.Color[] = [];
-    // instanced things whose colours dim at night: [mesh, day colours, how bright at night]
-    const tinted: [THREE.InstancedMesh, THREE.Color[], number][] = [[crowns, crownBase, 0.32]];
-    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), at = new THREE.Vector3();
-    for (let i = 0; i < TREES; i++) {
-        const z = -4 - rng() * 42, side = rng() < 0.5 ? -1 : 1;
-        const [cx, w] = river(z), x = cx + side * (1.7 + rng() * 1.5) * w;
-        const h = 1.4 + rng() * 1.8, r = 0.6 + rng() * 0.6, y = 0.38;
-        trunks.setMatrixAt(i, m4.compose(at.set(x, y, z), q.identity(), sc.set(1, h, 1)));
-        for (let j = 0; j < 2; j++) { // a big lump, and a smaller one perched off-centre on top
-            const k = j ? 0.62 : 1;
-            q.setFromAxisAngle(sc.set(0, 1, 0), rng() * 6.28);
-            crowns.setMatrixAt(i * 2 + j, m4.compose(
-                at.set(x + (j ? (rng() - 0.5) * r : 0), y + h + (j ? r * 0.75 : 0), z + (j ? (rng() - 0.5) * r : 0)),
-                q, sc.set(r * k, r * k * (1.1 + rng() * 0.3), r * k)));
-            crownBase.push(new THREE.Color(crownColors[Math.floor(rng() * crownColors.length)]).multiplyScalar(0.85 + rng() * 0.3));
+    // Solid shapes in one colour each, merged into one mesh per object (vertex colours, no textures)
+    const painted = (g: THREE.BufferGeometry, hex: string) => {
+        const out = g.index ? g.toNonIndexed() : g;
+        out.deleteAttribute("uv");
+        const c = new THREE.Color(hex), n = out.attributes.position.count, col = new Float32Array(n * 3);
+        for (let i = 0; i < n; i++) col.set([c.r, c.g, c.b], i * 3);
+        out.setAttribute("color", new THREE.BufferAttribute(col, 3));
+        return out;
+    };
+    const solid = () => new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide });
+    // things whose colours dim at night: [material, how bright at night]
+    const dimmed: [THREE.MeshLambertMaterial, number][] = [];
+
+    // ---- trees: bonsai-like pines in a few classic styles, Japanese maples, the odd golden ginkgo, and
+    // clumps of bamboo. Each kind is built a few times with different seeds, then scattered as instances,
+    // each slightly re-tinted so no two side by side look the same.
+    const BARK = ["#4e4036", "#5b4a3a", "#3f3a35", "#6a5847"];
+    const FOLIAGE = {
+        pine: ["#2f5a2c", "#3b6a32", "#2a4f2e", "#466f36", "#35603a", "#52783e"],
+        maple: ["#a8321e", "#c2481f", "#d9692a", "#8f2a1c", "#b8551f", "#e08a3a"],
+        ginkgo: ["#c9a73a", "#d8b84a", "#b8932e", "#e2c65a"],
+    };
+    const pick = <T,>(list: T[]) => list[Math.floor(rng() * list.length)];
+    const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+    // A branch or trunk that narrows from r0 to r1 along its length
+    function limb(points: THREE.Vector3[], r0: number, r1: number, color: string, segs = 12) {
+        const curve = new THREE.CatmullRomCurve3(points), g = new THREE.TubeGeometry(curve, segs, r0, 6);
+        const pos = g.attributes.position, ring = 7, c = new THREE.Vector3(), p = new THREE.Vector3();
+        for (let i = 0; i <= segs; i++) {
+            curve.getPointAt(i / segs, c);
+            const k = (r0 + (r1 - r0) * (i / segs)) / r0;
+            for (let j = 0; j < ring; j++) {
+                const idx = i * ring + j;
+                p.fromBufferAttribute(pos, idx).sub(c).multiplyScalar(k).add(c);
+                pos.setXYZ(idx, p.x, p.y, p.z);
+            }
+        }
+        return painted(g, color);
+    }
+    // A flat cloud of leaves: lumps spread in a disc, the top ones catching more light
+    function pad(parts: THREE.BufferGeometry[], at: THREE.Vector3, r: number, colors: string[], flat = 0.36) {
+        const lumps = 5 + Math.floor(rng() * 3);
+        for (let k = 0; k < lumps; k++) {
+            const a = rng() * 6.28, d = k ? r * (0.35 + rng() * 0.5) : 0, rr = r * (k ? 0.45 + rng() * 0.3 : 0.75);
+            const g = new THREE.IcosahedronGeometry(1, 1).scale(rr, rr * flat, rr)
+                .translate(at.x + Math.cos(a) * d, at.y + (k ? (rng() - 0.3) * r * 0.25 : r * 0.08), at.z + Math.sin(a) * d);
+            const col = new THREE.Color(pick(colors)).multiplyScalar(k ? 0.9 + rng() * 0.2 : 1.12);
+            parts.push(painted(g, "#" + col.getHexString()));
         }
     }
-    world.add(trunks, crowns);
-
-    // ---- wildflowers along both banks: a stem and a little head each, in a few colours, nodding in the breeze
-    const FLOWERS = small ? 320 : 700;
-    const stems = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.006, 0.01, 1, 3).translate(0, 0.5, 0),
-        new THREE.MeshLambertMaterial({ color: "#4f7a3a" }), FLOWERS);
-    const heads = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshLambertMaterial({ flatShading: true }), FLOWERS);
-    const bloomColors = ["#e8484f", "#f4c430", "#ffffff", "#b07ce0", "#f28cb8", "#ff8a3d", "#f7f0c8"];
-    const headBase: THREE.Color[] = [];
-    const flowerSpots: { x: number; y: number; z: number; h: number; r: number; ph: number }[] = [];
-    for (let i = 0; i < FLOWERS; i++) {
-        const z = 6 - rng() * 44, d = 1.12 + rng() ** 1.5 * 0.5, [cx, w] = river(z);
-        const x = cx + (rng() < 0.5 ? -1 : 1) * d * w;
-        flowerSpots.push({ x, y: bankHeight(d) - 0.02, z, h: 0.12 + rng() * 0.22, r: 0.025 + rng() * 0.025, ph: rng() * 6.28 });
-        headBase.push(new THREE.Color(bloomColors[Math.floor(rng() * bloomColors.length)]));
-    }
-    tinted.push([heads, headBase, 0.3]);
-    world.add(stems, heads);
-    const tip = new THREE.Vector3(), nod = new THREE.Quaternion(), X = new THREE.Vector3(1, 0, 0);
-    function placeFlowers(t: number) {
-        flowerSpots.forEach((fl, i) => {
-            const a = Math.sin(t * 1.3 + fl.ph) * 0.12; // a gentle nod downstream and back
-            nod.setFromAxisAngle(X, a);
-            stems.setMatrixAt(i, m4.compose(at.set(fl.x, fl.y, fl.z), nod, sc.set(1, fl.h, 1)));
-            tip.set(0, fl.h, 0).applyQuaternion(nod).add(at);
-            heads.setMatrixAt(i, m4.compose(tip, nod, sc.set(fl.r * 1.3, fl.r * 0.7, fl.r * 1.3)));
-        });
-        stems.instanceMatrix.needsUpdate = heads.instanceMatrix.needsUpdate = true;
-    }
-
-    // ---- koi swimming slowly upstream, weaving a little, just under the surface
-    const KOI = small ? 7 : 11;
-    const bodyGeo = new THREE.SphereGeometry(1, 16, 8).scale(0.06, 0.035, 0.36); // long and slim, nose towards -z
-    const patchGeo = new THREE.SphereGeometry(1, 12, 6).scale(0.045, 0.03, 0.14); // a coloured patch on the back
-    const tailGeo = new THREE.BufferGeometry();
-    tailGeo.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, -0.11, 0, 0.2, 0.11, 0, 0.2, 0, 0, 0.12], 3));
-    tailGeo.setIndex([0, 1, 3, 0, 3, 2]);
-    tailGeo.computeVertexNormals();
-    const koiMat = () => new THREE.MeshLambertMaterial({ transparent: true, opacity: 0.7, side: THREE.DoubleSide });
-    const bodies = new THREE.InstancedMesh(bodyGeo, koiMat(), KOI), tails = new THREE.InstancedMesh(tailGeo, koiMat(), KOI);
-    const patches = new THREE.InstancedMesh(patchGeo, koiMat(), KOI * 2);
-    bodies.renderOrder = tails.renderOrder = 3;
-    patches.renderOrder = 4; // drawn after the water and softened, as if seen through it
-    // body and patch colours: white with red (kohaku), orange with white, gold with black, white with orange
-    const KINDS = [["#f4efe6", "#d9301c"], ["#f26b1d", "#f8f2ea"], ["#f5b335", "#2a2522"], ["#f8f2ea", "#ff7a2f"], ["#e84a1f", "#f4efe6"]];
-    const koiBase: THREE.Color[] = [], patchBase: THREE.Color[] = [];
-    const koi = Array.from({ length: KOI }, () => {
-        const [body, patch] = KINDS[Math.floor(rng() * KINDS.length)];
-        koiBase.push(new THREE.Color(body));
-        patchBase.push(new THREE.Color(patch), new THREE.Color(patch));
-        return { z: -26 + rng() * 34, off: (rng() * 2 - 1) * 0.55, speed: 0.35 + rng() * 0.45, ph: rng() * 6.28, size: 0.8 + rng() * 0.5 };
-    });
-    tinted.push([bodies, koiBase, 0.45], [tails, koiBase, 0.45], [patches, patchBase, 0.45]);
-    world.add(bodies, tails, patches);
-    const swim = new THREE.Quaternion(), wag = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), back = new THREE.Vector3();
-    function placeKoi(t: number, dt: number) {
-        koi.forEach((k, i) => {
-            k.z -= k.speed * dt;
-            if (k.z < -30) k.z += 40; // round again from just behind the camera
-            const weave = (z: number) => { const [cx, w] = river(z); return cx + (k.off + 0.18 * Math.sin(z * 0.6 + k.ph)) * w; };
-            const x = weave(k.z), heading = Math.atan2(weave(k.z - 0.1) - x, -0.1); // facing where it's going
-            swim.setFromAxisAngle(Y, heading + Math.PI);
-            at.set(x, -0.12, k.z);
-            bodies.setMatrixAt(i, m4.compose(at, swim, sc.setScalar(k.size)));
-            for (let j = 0; j < 2; j++) { // two patches along the back, one near the head and one further back
-                back.set(0.012 * (j ? -1 : 1), 0.012, (j ? 0.1 : -0.12) * k.size).applyQuaternion(swim).add(at);
-                patches.setMatrixAt(i * 2 + j, m4.compose(back, swim, sc.setScalar(k.size * (j ? 0.8 : 1))));
+    // style: how the trunk grows. upright (straight, tiered), informal (an S-curve), slant (leaning hard),
+    // windswept (every branch blown to one side)
+    function tree(style: "upright" | "informal" | "slant" | "windswept", leaves: string[], flat = 0.36) {
+        const parts: THREE.BufferGeometry[] = [], bark = pick(BARK);
+        const H = 1.3 + rng() * 1.0, lean = style === "slant" ? 0.7 + rng() * 0.4 : style === "upright" ? 0.08 : (rng() - 0.5) * 0.8;
+        const wig = style === "informal" ? 0.4 : 0.12;
+        const pts = [v(0, -0.2, 0), v(lean * 0.25 + (rng() - 0.5) * wig, H * 0.3, (rng() - 0.5) * wig),
+            v(lean * 0.55 - (rng() - 0.5) * wig, H * 0.62, (rng() - 0.5) * wig), v(lean, H, (rng() - 0.5) * 0.2)];
+        const trunk = new THREE.CatmullRomCurve3(pts);
+        parts.push(limb(pts, 0.12, 0.045, bark, 16));
+        for (let r = 0; r < 4; r++) { // roots gripping the bank
+            const a = (r / 4) * 6.28 + rng() * 0.8, len = 0.25 + rng() * 0.2;
+            parts.push(limb([v(0, 0.02, 0), v(Math.cos(a) * len * 0.5, -0.01, Math.sin(a) * len * 0.5), v(Math.cos(a) * len, -0.12, Math.sin(a) * len)], 0.05, 0.012, bark, 6));
+        }
+        const wind = rng() * 6.28, branches = style === "upright" ? 4 : 2 + Math.floor(rng() * 3);
+        for (let b = 0; b < branches; b++) {
+            const from = trunk.getPoint(0.4 + (b / branches) * 0.5);
+            const a = style === "windswept" ? wind + (rng() - 0.5) * 0.7 : style === "upright" ? (b / branches) * 6.28 + rng() : rng() * 6.28;
+            const len = (style === "upright" ? 0.75 - (b / branches) * 0.4 : 0.45 + rng() * 0.5) * (style === "windswept" ? 1.3 : 1);
+            const to = from.clone().add(v(Math.cos(a) * len, 0.08 + rng() * 0.22, Math.sin(a) * len));
+            const mid = from.clone().lerp(to, 0.5).add(v(0, -0.08, 0)); // droops a little, then lifts
+            parts.push(limb([from, mid, to], 0.04, 0.015, bark, 8));
+            if (rng() < 0.5) { // a twig off the branch, with its own small pad
+                const tw = mid.clone().add(v((rng() - 0.5) * 0.4, 0.12 + rng() * 0.1, (rng() - 0.5) * 0.4));
+                parts.push(limb([mid, tw], 0.018, 0.008, bark, 4));
+                pad(parts, tw.add(v(0, 0.04, 0)), 0.18 + rng() * 0.1, leaves, flat);
             }
-            back.set(0, 0, 0.34 * k.size).applyQuaternion(swim).add(at); // tail at the back, flicking side to side
-            wag.setFromAxisAngle(Y, Math.sin(t * 7 + k.ph) * 0.45);
-            tails.setMatrixAt(i, m4.compose(back, swim.clone().multiply(wag), sc.setScalar(k.size)));
+            pad(parts, to.add(v(0, 0.06, 0)), (style === "upright" ? 0.42 - (b / branches) * 0.15 : 0.32 + rng() * 0.22), leaves, flat);
+        }
+        pad(parts, trunk.getPoint(1).add(v(0, 0.08, 0)), 0.45 + rng() * 0.25, leaves, flat); // the crown
+        return mergeGeometries(parts)!;
+    }
+    // A clump of bamboo: tall jointed canes leaning out a little, with sprays of thin leaves near the top
+    function bamboo() {
+        const parts: THREE.BufferGeometry[] = [], canes = 6 + Math.floor(rng() * 6);
+        for (let c = 0; c < canes; c++) {
+            const bx = (rng() - 0.5) * 0.5, bz = (rng() - 0.5) * 0.5, H = 2.2 + rng() * 1.6;
+            const tip = v(bx * 2.2 + (rng() - 0.5) * 0.3, H, bz * 2.2 + (rng() - 0.5) * 0.3), base = v(bx, -0.1, bz);
+            const green = pick(["#6f8f3c", "#5f8436", "#7d9a45", "#88a052"]);
+            parts.push(limb([base, base.clone().lerp(tip, 0.5), tip], 0.03, 0.018, green, 6));
+            for (let n = 1; n < 8; n++) { // the joints
+                const p = base.clone().lerp(tip, n / 8);
+                parts.push(painted(new THREE.CylinderGeometry(0.034, 0.034, 0.025, 6).translate(p.x, p.y, p.z), "#556f30"));
+            }
+            for (let l = 0; l < 7; l++) { // leaves: long thin blades hanging from the upper canes
+                const p = base.clone().lerp(tip, 0.6 + rng() * 0.4), a = rng() * 6.28;
+                const leaf = new THREE.ConeGeometry(0.028, 0.32, 3).rotateZ(Math.PI / 2 + 0.5).rotateY(a).scale(1, 0.35, 1)
+                    .translate(p.x + Math.cos(a) * 0.14, p.y - 0.04, p.z - Math.sin(a) * 0.14);
+                parts.push(painted(leaf, pick(["#4f7d36", "#5f8e3e", "#3f6c30", "#6a9a46"])));
+            }
+        }
+        return mergeGeometries(parts)!;
+    }
+
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), at = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0);
+    // where the pavilion stands (built further down): on the right bank upstream, beside the page's card
+    const PAV_Z = -11, PAV_X = river(PAV_Z)[0] + 2.5 * river(PAV_Z)[1];
+    const treeMat = solid();
+    dimmed.push([treeMat, 0.3]);
+    // [geometry, how many, nearest to the water (1 = the edge), how far back]
+    const kinds: [THREE.BufferGeometry, number, number, number][] = [
+        [tree("informal", FOLIAGE.pine), 7, 1.45, 1.5], [tree("informal", FOLIAGE.pine), 6, 1.45, 1.5],
+        [tree("upright", FOLIAGE.pine, 0.3), 6, 1.6, 1.5], [tree("slant", FOLIAGE.pine), 5, 1.4, 1.2],
+        [tree("windswept", FOLIAGE.pine), 5, 1.5, 1.4], [tree("informal", FOLIAGE.maple, 0.5), 5, 1.5, 1.5],
+        [tree("upright", FOLIAGE.maple, 0.55), 4, 1.6, 1.4], [tree("slant", FOLIAGE.ginkgo, 0.5), 3, 1.6, 1.4],
+        [bamboo(), 6, 1.9, 1.4], [bamboo(), 6, 1.9, 1.4],
+    ];
+    const tint = new THREE.Color();
+    for (const [geo, n, near, spread] of kinds) {
+        const count = Math.max(1, Math.round(n * (small ? 0.6 : 1))), mesh = new THREE.InstancedMesh(geo, treeMat, count);
+        for (let i = 0; i < count; i++) {
+            let z = 0, side = 1, d = 0, cx = 0, w = 0;
+            do { // anywhere on the banks, but leave the pavilion clear
+                z = -3 - rng() * 40; side = rng() < 0.5 ? -1 : 1; d = near + rng() * spread;
+                [cx, w] = river(z);
+            } while (Math.hypot(cx + side * d * w - PAV_X, z - PAV_Z) < 2.8);
+            q.setFromAxisAngle(Y, rng() * 6.28);
+            const k = 0.75 + rng() * 0.6;
+            mesh.setMatrixAt(i, m4.compose(at.set(cx + side * d * w, bankHeight(Math.min(d, 1.4)) - 0.05, z), q, sc.set(k, k * (0.9 + rng() * 0.25), k)));
+            const shade = 0.85 + rng() * 0.25; // each one a touch lighter or darker, warmer or cooler
+            mesh.setColorAt(i, tint.setRGB(shade * (0.97 + rng() * 0.06), shade, shade * (0.95 + rng() * 0.08)));
+        }
+        world.add(mesh);
+    }
+
+    // ---- stone lanterns on the banks: base, pillar, a lamp box that glows at night, a curved roof and a jewel
+    const STONE = "#8d8a80";
+    const lantern = mergeGeometries([
+        painted(new THREE.CylinderGeometry(0.2, 0.25, 0.1, 6).translate(0, 0.05, 0), STONE),
+        painted(new THREE.CylinderGeometry(0.065, 0.085, 0.5, 6).translate(0, 0.35, 0), STONE),
+        painted(new THREE.CylinderGeometry(0.21, 0.15, 0.08, 6).translate(0, 0.64, 0), STONE),
+        ...[[-1, -1], [-1, 1], [1, -1], [1, 1]].map(([x, z]) => painted(new THREE.BoxGeometry(0.04, 0.2, 0.04).translate(x * 0.09, 0.78, z * 0.09), STONE)),
+        painted(new THREE.CylinderGeometry(0.3, 0.3, 0.035, 6).translate(0, 0.895, 0), STONE),
+        painted(new THREE.ConeGeometry(0.27, 0.17, 6).translate(0, 0.995, 0), STONE),
+        painted(new THREE.SphereGeometry(0.045, 8, 6).translate(0, 1.1, 0), STONE),
+    ])!;
+    const lanternMat = solid();
+    dimmed.push([lanternMat, 0.4]);
+    const lampMat = new THREE.MeshBasicMaterial({ color: "#e9dcc0" }); // paper windows, lit from inside at night
+    const glowTexture = (() => {
+        const c = document.createElement("canvas");
+        c.width = c.height = 64;
+        const g = c.getContext("2d")!, r = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+        r.addColorStop(0, "rgba(255,190,110,0.85)");
+        r.addColorStop(0.35, "rgba(255,160,80,0.25)");
+        r.addColorStop(1, "rgba(255,150,70,0)");
+        g.fillStyle = r;
+        g.fillRect(0, 0, 64, 64);
+        const t = new THREE.CanvasTexture(c);
+        t.colorSpace = THREE.SRGBColorSpace;
+        return t;
+    })();
+    const glowMat = new THREE.SpriteMaterial({ map: glowTexture, transparent: true, depthWrite: false, opacity: 0 });
+    for (const [side, d, z] of [[-1, 1.28, BRIDGE_Z - 1.4], [1, 1.3, -6.5], [-1, 1.32, -11.5]]) {
+        const [cx, w] = river(z), x = cx + side * d * w, y = bankHeight(d) - 0.04;
+        const stone = new THREE.Mesh(lantern, lanternMat);
+        stone.position.set(x, y, z);
+        stone.scale.setScalar(1.25);
+        stone.rotation.y = rng();
+        const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.17, 0.14), lampMat);
+        lamp.position.set(0, 0.78, 0);
+        const glow = new THREE.Sprite(glowMat);
+        glow.position.set(0, 0.78, 0);
+        glow.scale.setScalar(1.6);
+        stone.add(lamp, glow);
+        world.add(stone);
+    }
+
+    // ---- a red arched bridge (taiko-bashi) across the stream: a curved plank deck on vermilion piers,
+    // railings with posts, and bronze onion-shaped caps (giboshi) on the end posts
+    {
+        const VERMILION = "#b8342a", PLANK = "#6e4a33", BRONZE = "#a8873e";
+        const SPAN = 9.4, RISE = 0.95, WIDE = 0.62, SEGS = 28, BANK = 0.42;
+        const deckY = (x: number) => BANK + RISE * (1 - (2 * x / SPAN) ** 2) - 0.05;
+        const parts: THREE.BufferGeometry[] = [];
+        // a box from (x0,y0) to (x1,y1) along the arch, w deep and t thick, its top at those points
+        const along = (x0: number, x1: number, y0: number, y1: number, t: number, w: number, z: number, color: string) => {
+            const len = Math.hypot(x1 - x0, y1 - y0);
+            return painted(new THREE.BoxGeometry(len, t, w).translate(0, -t / 2, 0).rotateZ(Math.atan2(y1 - y0, x1 - x0))
+                .translate((x0 + x1) / 2, (y0 + y1) / 2, z), color);
+        };
+        for (let i = 0; i < SEGS; i++) {
+            const x0 = -SPAN / 2 + (i / SEGS) * SPAN, x1 = x0 + SPAN / SEGS;
+            parts.push(along(x0, x1, deckY(x0), deckY(x1), 0.06, WIDE * 2, 0, PLANK)); // planks
+            parts.push(along(x0, x1, deckY(x0) - 0.06, deckY(x1) - 0.06, 0.1, 0.06, WIDE, VERMILION), // side beams
+                along(x0, x1, deckY(x0) - 0.06, deckY(x1) - 0.06, 0.1, 0.06, -WIDE, VERMILION));
+            for (const z of [WIDE, -WIDE]) { // top rail and a lower rail
+                parts.push(along(x0, x1, deckY(x0) + 0.36, deckY(x1) + 0.36, 0.04, 0.05, z, VERMILION),
+                    along(x0, x1, deckY(x0) + 0.18, deckY(x1) + 0.18, 0.025, 0.03, z, VERMILION));
+            }
+        }
+        for (let i = 0; i <= SEGS; i += 4) { // railing posts, with caps on the four end posts
+            const x = -SPAN / 2 + (i / SEGS) * SPAN, y = deckY(x), end = i === 0 || i === SEGS;
+            for (const z of [WIDE, -WIDE]) {
+                parts.push(painted(new THREE.BoxGeometry(0.07, 0.42, 0.07).translate(x, y + 0.19, z), VERMILION));
+                if (end) {
+                    parts.push(painted(new THREE.SphereGeometry(0.055, 10, 8).scale(1, 1.15, 1).translate(x, y + 0.46, z), BRONZE),
+                        painted(new THREE.ConeGeometry(0.03, 0.08, 8).translate(x, y + 0.55, z), BRONZE));
+                }
+            }
+        }
+        for (const x of [-2.9, -1.2, 1.2, 2.9]) { // piers standing in the stream, braced across
+            const top = deckY(x) - 0.12;
+            for (const z of [WIDE - 0.08, -WIDE + 0.08]) parts.push(painted(new THREE.CylinderGeometry(0.06, 0.07, top + 1.2, 8).translate(x, (top - 1.2) / 2, z), VERMILION));
+            parts.push(painted(new THREE.BoxGeometry(0.08, 0.08, WIDE * 2).translate(x, top - 0.05, 0), VERMILION),
+                painted(new THREE.BoxGeometry(0.06, 0.06, WIDE * 2).translate(x, Math.min(0.1, top - 0.4), 0), VERMILION));
+        }
+        const mat = solid();
+        dimmed.push([mat, 0.35]);
+        const bridge = new THREE.Mesh(mergeGeometries(parts)!, mat);
+        const [cx] = river(BRIDGE_Z);
+        bridge.position.set(cx, 0, BRIDGE_Z);
+        bridge.rotation.y = Math.atan2(river(BRIDGE_Z + 0.5)[0] - river(BRIDGE_Z - 0.5)[0], 1); // square across the current
+        world.add(bridge);
+    }
+
+    // ---- a red pavilion upstream on the far bank, half lost in the mist
+    const RED = "#9e2b24", ROOF = "#3f3d3b";
+    const roofCurve = [[0.02, 1.2], [0.2, 1.05], [0.55, 0.62], [0.95, 0.3], [1.3, 0.14], [1.52, 0.24]] // eaves turn up at the edge
+        .map(([r, y]) => new THREE.Vector2(r, y));
+    const pavilion = new THREE.Mesh(mergeGeometries([
+        painted(new THREE.CylinderGeometry(1.2, 1.3, 0.5, 6).translate(0, -0.05, 0), "#8a857c"),
+        ...Array.from({ length: 6 }, (_, i) => {
+            const a = (i / 6) * Math.PI * 2;
+            return painted(new THREE.CylinderGeometry(0.06, 0.06, 1.45, 8).translate(Math.cos(a) * 0.9, 0.92, Math.sin(a) * 0.9), RED);
+        }),
+        painted(new THREE.CylinderGeometry(0.98, 0.98, 0.14, 6).translate(0, 1.6, 0), RED),
+        painted(new THREE.CylinderGeometry(0.95, 0.95, 0.06, 6, 1, true).translate(0, 0.45, 0), RED), // low railing
+        painted(new THREE.LatheGeometry(roofCurve, 6).translate(0, 1.55, 0), ROOF),
+        painted(new THREE.ConeGeometry(0.07, 0.4, 6).translate(0, 2.9, 0), ROOF),
+        painted(new THREE.SphereGeometry(0.08, 8, 6).translate(0, 2.72, 0), ROOF),
+    ])!, solid());
+    dimmed.push([pavilion.material as THREE.MeshLambertMaterial, 0.3]);
+    {
+        pavilion.position.set(PAV_X, 0.42, PAV_Z);
+        pavilion.scale.setScalar(0.75);
+        pavilion.rotation.y = -0.3;
+        world.add(pavilion);
+    }
+
+    // ---- koi swimming slowly upstream, weaving a little, just under the surface. The fish is
+    // "IkanKoi3D_032" by nurulaini on Sketchfab (CC-BY-4.0, credited on the page), shrunk for the web; it
+    // loads after the rest of the scene. It has no animation, so the vertex shader swims it: a wave runs
+    // down the body, growing towards the tail.
+    const KOI = small ? 7 : 11, KOI_LENGTH = 0.7;
+    const koiMat = new THREE.MeshLambertMaterial({ transparent: true, opacity: 0.88 }); // a little see-through, as if under water
+    koiMat.onBeforeCompile = (shader) => {
+        shader.uniforms.uTime = uniforms.uTime;
+        shader.vertexShader = "uniform float uTime;\n" + shader.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>
+          float tailward = clamp(transformed.z / ${KOI_LENGTH.toFixed(2)} + 0.5, 0.0, 1.0);  // 0 at the nose, 1 at the tail
+          transformed.x += sin(transformed.z * 8.0 - uTime * 7.0 + float(gl_InstanceID) * 1.9) * (0.015 + 0.07 * tailward * tailward);`);
+    };
+    dimmed.push([koiMat, 0.45]);
+    const koi = Array.from({ length: KOI }, () => {
+        const z = -24 + rng() * 30, [cx, w] = river(z);
+        return { x: cx + (rng() * 2 - 1) * 0.5 * w, z, heading: (rng() - 0.5) * 2.4 + (rng() < 0.25 ? Math.PI : 0), // mostly upstream
+            speed: 0.3 + rng() * 0.35, ph: rng() * 6.28, size: 0.8 + rng() * 0.5 };
+    });
+    const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+    let school: THREE.InstancedMesh | null = null;
+    const toFloat = (a: THREE.BufferAttribute | THREE.InterleavedBufferAttribute) => { // the file is quantized; undo it before transforming
+        const out = new Float32Array(a.count * a.itemSize);
+        for (let i = 0; i < a.count; i++) for (let k = 0; k < a.itemSize; k++) out[i * a.itemSize + k] = a.getComponent(i, k);
+        return new THREE.BufferAttribute(out, a.itemSize);
+    };
+    // The model is posed mid-turn, bent into a C seen from above. Unbend it so the shader's swimming wave
+    // starts from a straight fish: find the spine (the middle of the body in slices along z), then turn each
+    // slice so the spine runs straight down z, keeping each vertex's distance from it.
+    function straighten(geo: THREE.BufferGeometry) {
+        const pos = geo.attributes.position as THREE.BufferAttribute, nor = geo.attributes.normal as THREE.BufferAttribute;
+        geo.computeBoundingBox();
+        const { min, max } = geo.boundingBox!, BINS = 24, len = max.z - min.z;
+        const sum = new Float64Array(BINS), count = new Float64Array(BINS);
+        const bin = (z: number) => Math.min(BINS - 1, Math.max(0, Math.floor(((z - min.z) / len) * BINS)));
+        for (let i = 0; i < pos.count; i++) { const b = bin(pos.getZ(i)); sum[b] += pos.getX(i); count[b]++; }
+        const raw = Array.from(sum, (v, b) => (count[b] ? v / count[b] : NaN));
+        raw.forEach((v, b) => { if (Number.isNaN(v)) raw[b] = raw[b - 1] ?? 0; });
+        const spine = raw.map((v, b) => (raw[b - 1] ?? v) * 0.25 + v * 0.5 + (raw[b + 1] ?? v) * 0.25); // smoothed
+        const step = len / BINS, zAt = (b: number) => min.z + (b + 0.5) * step;
+        const angle = spine.map((_, b) => Math.atan2((spine[Math.min(b + 1, BINS - 1)] - spine[Math.max(b - 1, 0)]),
+            (Math.min(b + 1, BINS - 1) - Math.max(b - 1, 0)) * step));
+        const arc = [0]; // distance along the spine to each slice's centre
+        for (let b = 1; b < BINS; b++) arc.push(arc[b - 1] + Math.hypot(spine[b] - spine[b - 1], step));
+        const sample = (list: number[], z: number) => { // linear between slice centres
+            const u = Math.min(BINS - 1, Math.max(0, (z - min.z) / step - 0.5)), b = Math.min(Math.floor(u), BINS - 2), k = u - b;
+            return list[b] + (list[b + 1] - list[b]) * k;
+        };
+        for (let i = 0; i < pos.count; i++) {
+            const z = pos.getZ(i), dx = pos.getX(i) - sample(spine, z), th = sample(angle, z), c = Math.cos(th), sn = Math.sin(th);
+            pos.setXYZ(i, dx * c, pos.getY(i), zAt(0) + sample(arc, z) + dx * sn);
+            const nx = nor.getX(i), nz = nor.getZ(i);
+            nor.setXYZ(i, nx * c - nz * sn, nor.getY(i), nx * sn + nz * c);
+        }
+        pos.needsUpdate = nor.needsUpdate = true;
+    }
+    let disposed = false;
+    new GLTFLoader().load("/models/koi/koi.glb", (gltf) => {
+        if (disposed) return;
+        let src: THREE.Mesh | undefined;
+        gltf.scene.updateMatrixWorld(true);
+        gltf.scene.traverse((o) => { if ((o as THREE.Mesh).isMesh) src = o as THREE.Mesh; });
+        if (!src) return;
+        const geo = new THREE.BufferGeometry();
+        for (const name of ["position", "normal", "uv"]) geo.setAttribute(name, toFloat(src.geometry.getAttribute(name)));
+        geo.setIndex(src.geometry.index);
+        // the model lies along z with its tail at -z; turn it to face -z, centre it, straighten it and size it
+        geo.applyMatrix4(src.matrixWorld).rotateY(Math.PI).center();
+        straighten(geo);
+        geo.center();
+        geo.computeBoundingBox();
+        const box = geo.boundingBox!;
+        geo.scale(KOI_LENGTH / (box.max.z - box.min.z), KOI_LENGTH / (box.max.z - box.min.z), KOI_LENGTH / (box.max.z - box.min.z));
+        koiMat.map = (src.material as THREE.MeshStandardMaterial).map;
+        koiMat.needsUpdate = true;
+        school = new THREE.InstancedMesh(geo, koiMat, KOI);
+        school.renderOrder = 3; // drawn after the water, so they show through it
+        school.frustumCulled = false;
+        world.add(school);
+    });
+    const swim = new THREE.Quaternion();
+    // Heading 0 is upstream (-z). Each fish drifts left and right on its own slow rhythm, and near a bank
+    // turns back towards the middle of the stream, so they wander rather than march in step.
+    function placeKoi(t: number, dt: number) {
+        if (!school) return;
+        koi.forEach((k, i) => {
+            const [cx, w] = river(k.z), across = (k.x - cx) / w;
+            k.heading += (0.5 * Math.sin(t * 0.35 + k.ph) + 0.3 * Math.sin(t * 0.83 + k.ph * 2.3)) * dt;
+            if (Math.abs(across) > 0.45) { // steer back towards the middle, keeping up- or downstream
+                const ahead = Math.cos(k.heading) >= 0 ? -2 : 2;
+                k.heading += wrapAngle(Math.atan2(k.x - cx, -ahead) - k.heading) * Math.min(1, (Math.abs(across) - 0.45) * 6) * dt * 1.5;
+            }
+            const speed = k.speed * (0.75 + 0.25 * Math.sin(t * 0.5 + k.ph)); // easing off and picking up
+            k.x -= Math.sin(k.heading) * speed * dt;
+            k.z -= Math.cos(k.heading) * speed * dt;
+            if (k.z < -30) k.z += 40; // round again from just behind the camera, or the other way
+            if (k.z > 10) k.z -= 40;
+            swim.setFromAxisAngle(Y, k.heading);
+            school!.setMatrixAt(i, m4.compose(at.set(k.x, -0.12, k.z), swim, sc.setScalar(k.size)));
         });
-        bodies.instanceMatrix.needsUpdate = tails.instanceMatrix.needsUpdate = patches.instanceMatrix.needsUpdate = true;
+        school.instanceMatrix.needsUpdate = true;
     }
 
     // ---- leaves riding the current
@@ -530,33 +788,30 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement) {
 
     // ---- colours: AquaPlot's teal water on this site's white (or near-black) page
     function setDark(dark: boolean) {
-        const bg = new THREE.Color(dark ? "#0a0a0a" : "#ffffff");
-        const accent = new THREE.Color(dark ? "#56b6c2" : "#0f6b7a");
+        const bg = new THREE.Color(dark ? "#0a0a0a" : "#d9e0da"); // mist
+        const accent = new THREE.Color(dark ? "#3f9c8e" : "#1d6b62"); // jade
         const u = uniforms, c = (hex: string) => new THREE.Color(hex), set = (name: string, value: THREE.Color) => u[name].value.copy(value);
         if (dark) {
-            set("uDeep", c("#06232a")); set("uShallow", accent.clone().lerp(c("#0c3a42"), 0.55));
+            set("uDeep", c("#04201c")); set("uShallow", accent.clone().lerp(c("#0b3832"), 0.6));
             set("uSky", bg.clone().lerp(accent, 0.3)); set("uSun", c("#d9f6f8").multiplyScalar(0.22));
             set("uBedA", c("#3a4a4c")); set("uBedB", c("#5d5a4e")); set("uGap", c("#1a2426")); set("uCaustic", c("#8fe3ea"));
             set("uFoam", c("#b9dfe3")); set("uGrassA", c("#1d2b22")); set("uGrassB", c("#2d3d2c")); set("uEarth", c("#2b2822"));
             set("uFlower", c("#6d7a5a")); set("uReedA", c("#1b281f")); set("uReedB", c("#4a6743"));
             set("uRock", c("#5b6466")); u.uReflect.value = 0.8;
         } else {
-            set("uDeep", accent); set("uShallow", accent.clone().lerp(c("#39c0b6"), 0.7));
-            set("uSky", bg.clone().lerp(accent, 0.3)); set("uSun", c("#ffffff").multiplyScalar(0.55));
-            set("uBedA", c("#9a927c")); set("uBedB", c("#7a7466")); set("uGap", c("#5b5649")); set("uCaustic", c("#f4fffd"));
-            set("uFoam", c("#ffffff")); set("uGrassA", c("#7fa36a")); set("uGrassB", c("#a3bd82")); set("uEarth", c("#9a8a6a"));
-            set("uFlower", c("#f4efd0")); set("uReedA", c("#5d7d45")); set("uReedB", c("#b5c98a"));
-            set("uRock", c("#9a958a")); u.uReflect.value = 0.5;
+            set("uDeep", accent); set("uShallow", accent.clone().lerp(c("#5fb3a0"), 0.6));
+            set("uSky", bg.clone().lerp(accent, 0.25)); set("uSun", c("#ffffff").multiplyScalar(0.35));
+            set("uBedA", c("#7c7a70")); set("uBedB", c("#5f5d55")); set("uGap", c("#3d3c36")); set("uCaustic", c("#cdeee4"));
+            set("uFoam", c("#eef6f2")); set("uGrassA", c("#3d6636")); set("uGrassB", c("#587c43")); set("uEarth", c("#4f4334"));
+            set("uFlower", c("#f4efd0")); set("uReedA", c("#2c4f2c")); set("uReedB", c("#6f9353"));
+            set("uRock", c("#858175")); u.uReflect.value = 0.35;
         }
         set("uFog", bg);
-        world.fog = new THREE.Fog(bg, 8, 28);
+        world.fog = new THREE.Fog(bg, 8, 30);
         u.uNight.value = dark ? 1 : 0;
-        for (const [mesh, base, night] of tinted) {
-            base.forEach((col, i) => mesh.setColorAt(i, col.clone().multiplyScalar(dark ? night : 1)));
-            mesh.instanceColor!.needsUpdate = true;
-        }
-        (stems.material as THREE.MeshLambertMaterial).color.set(dark ? "#1c2b16" : "#4f7a3a");
-        (trunks.material as THREE.MeshLambertMaterial).color.set(dark ? "#241c14" : "#5a4632");
+        for (const [mat, night] of dimmed) mat.color.setScalar(dark ? night : 1);
+        lampMat.color.set(dark ? "#ffc27a" : "#e9dcc0");
+        glowMat.opacity = dark ? 1 : 0;
         renderer.setClearColor(bg);
         if (!running) draw(0);
     }
@@ -583,7 +838,6 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement) {
         camera.updateProjectionMatrix();
         uniforms.uTime.value = t;
 
-        placeFlowers(t);
         placeKoi(t, dt);
         for (const leaf of leaves) { // drift downstream, wrapping round the stretch of world near the camera
             const d = leaf.userData;
@@ -628,6 +882,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement) {
         start: update,
         stop() {
             running = false;
+            disposed = true;
             cancelAnimationFrame(frame);
             resize.disconnect();
             removeEventListener("pointermove", onPointer);
@@ -658,11 +913,14 @@ export default function RiverBackground() {
     }, []);
     useEffect(() => scene.current?.setDark(dark), [dark]);
 
-    return (
-        // a soft teal glow shows while the scene loads, or if WebGL isn't available
+    return (<>
+        {/* a soft glow shows while the scene loads, or if WebGL isn't available */}
         <div ref={host} aria-hidden className="fixed inset-0 -z-10 pointer-events-none
-            bg-[radial-gradient(120%_80%_at_50%_62%,#c3dade_0%,#ffffff_75%)] dark:bg-[radial-gradient(120%_80%_at_50%_62%,#1a3a40_0%,#0a0a0a_75%)]">
+            bg-[radial-gradient(120%_80%_at_50%_62%,#a9c7bf_0%,#d9e0da_75%)] dark:bg-[radial-gradient(120%_80%_at_50%_62%,#1a3a40_0%,#0a0a0a_75%)]">
             <canvas ref={canvas} className="absolute inset-0 h-full w-full opacity-0 transition-opacity duration-[1400ms]" />
         </div>
-    );
+        <p className="fixed bottom-4 right-4 text-[0.75rem] text-white/80 [text-shadow:0_1px_3px_rgb(0_0_0/0.5)]">
+            &ldquo;IkanKoi3D_032&rdquo; <a href="https://sketchfab.com/3d-models/ikankoi3d-032-721a743e2a7d49eaa59e07a67a23a7e8" target="_blank">(koi)</a> by nurulaini is licensed under Creative Commons Attribution <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank">(CC BY 4.0)</a>
+        </p>
+    </>);
 }
