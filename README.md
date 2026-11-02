@@ -9,7 +9,55 @@ A personal blog/website. Read about me, my blogs, and explore the UI I've curate
 <img width="1512" height="960" alt="Screenshot 2026-10-31 at 4 44 15 AM" src="https://github.com/user-attachments/assets/d118da43-f86b-43ed-b21c-e4028e86e35b" />
 
 Live deployment at: https://willy-blog-q6ko59o5a-willy-0e2c.vercel.app/
-Run locally: npm run dev --> http://localhost:3000 in browser of choice to view.
+### Run it locally
+
+You need [Node.js](https://nodejs.org) 20.9 or newer and a MongoDB database (a free
+[MongoDB Atlas](https://www.mongodb.com/atlas) cluster works).
+
+1. **Install the packages**
+
+   ```bash
+   git clone https://github.com/winterrmelonn/willy-blog.git
+   cd willy-blog
+   npm install
+   ```
+
+2. **Add the font.** The site uses [Lastik](https://www.thatthattype.com/fonts/lastik) by That That
+   Type. Its license doesn't allow the font file on GitHub, so it isn't in this repo. Get the free
+   download from that page, then copy `Fonts/Lastik Free Font/WOFF/LastikFreeFont-Free.woff2` from the
+   zip to `app/fonts/Lastik.woff2`:
+
+   ```bash
+   mkdir -p app/fonts
+   cp "path/to/Lastik Free Font/WOFF/LastikFreeFont-Free.woff2" app/fonts/Lastik.woff2
+   ```
+
+3. **Create a `.env` file** in the project folder:
+
+   ```bash
+   MONGO_URI="mongodb+srv://USER:PASSWORD@CLUSTER.mongodb.net/DATABASE"
+   BETTER_AUTH_URL="http://localhost:3000"
+   BETTER_AUTH_SECRET="any long random string"   # e.g. from: openssl rand -base64 32
+   TODOIST_API_TOKEN="your Todoist API token"     # optional: without it the calendar is just empty
+   ```
+
+   The Todoist token is under Settings → Integrations → Developer in Todoist.
+
+4. **Start it**
+
+   ```bash
+   npm run dev
+   ```
+
+   Then open [http://localhost:3000](http://localhost:3000) in Chrome or Safari (VS Code's Simple
+   Browser doesn't keep the sign-in cookie). Pages reload as you edit them.
+
+To post blogs, edit the About page and projects, and review blog requests, sign up on the Profile page
+with an email listed in `ADMIN_EMAILS` in `lib/auth.ts`.
+
+**Deploying on Vercel:** set the same variables in the Vercel project (with `BETTER_AUTH_URL` set to the
+live address), plus `LASTIK_WOFF2_BASE64`: the font file in base64 (`base64 -i app/fonts/Lastik.woff2 | pbcopy`
+on a Mac). `scripts/font.mjs` writes the font from it before each build.
 
 Author's note / further details:
 
@@ -31,3 +79,8 @@ at work, i talked with a cloud engineer today and he was hyping the heck out of 
 
 hopefully i’ll get some stardust to get dns funding from this, even though stardance is ending.
 i’ll post some more blogs, hopefully ygs enjoy the glimpse into my life and the visuals i’ve created. :D
+
+### Credits
+
+- "Spider Lily (Lycoris Radiata)" by [OsianOHM](https://sketchfab.com/OsianOHM), CC BY 4.0
+- "IkanKoi3D_032" by [nurulaini](https://sketchfab.com/nurulaini), CC BY 4.0

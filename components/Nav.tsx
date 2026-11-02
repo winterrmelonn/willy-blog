@@ -16,6 +16,7 @@ async function Nav() {
       <nav className="flex flex-wrap justify-center gap-1 items-center pl-36 pr-4 sm:px-36 py-1.5">
         <Link href="/" className={box}>Home</Link>
         <Link href="/blogs" className={box}>Blogs</Link>
+        <Link href="/projects" className={box}>Projects</Link>
         {admin && <Link href="/post" className={box}>Post</Link>}
         <Link href="/calendar" className={box}>Calendar</Link>
         <Link href="/about" className={box}>About</Link>

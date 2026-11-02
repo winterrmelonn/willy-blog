@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/font.mjs && next dev",
     "build": "node scripts/font.mjs && next build",
     "start": "next start",
     "lint": "eslint"

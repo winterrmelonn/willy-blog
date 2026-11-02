@@ -7,7 +7,7 @@ const file = new URL("../app/fonts/Lastik.woff2", import.meta.url);
 if (!existsSync(file)) {
     const b64 = process.env.LASTIK_WOFF2_BASE64;
     if (!b64) {
-        console.error("Missing app/fonts/Lastik.woff2. Set LASTIK_WOFF2_BASE64 (base64 of the font file) in the environment.");
+        console.error("Missing app/fonts/Lastik.woff2. See \"Add the font\" in README.md (or set LASTIK_WOFF2_BASE64 to the font file in base64).");
         process.exit(1);
     }
     mkdirSync(new URL("../app/fonts/", import.meta.url), { recursive: true });
