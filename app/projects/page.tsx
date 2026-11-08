@@ -45,7 +45,7 @@ export default async function Projects() {
   const saved = await Project.find().lean<ProjectType[]>();
   const projects = PROJECTS.map((p) => {
     const s = saved.find((d) => d.key === p.key);
-    return s ? { key: p.key, name: s.name, when: s.when ?? "", about: s.about ?? "", links: (s.links ?? []).map(({ label, href }) => ({ label, href })) } : p;
+    return s ? { key: p.key, name: s.name, when: s.when ?? "", about: s.about ?? "", links: (s.links ?? []).map(({ label, href }) => ({ label, href })), image: s.image } : p;
   });
 
   return (

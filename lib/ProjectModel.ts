@@ -8,6 +8,7 @@ const ProjectSchema = new Schema(
         when: String,
         about: String,
         links: [{ label: String, href: String, _id: false }],
+        image: String, // id of the cover image (lib/ImageModel.ts), if it has one
     },
     { timestamps: true },
 );

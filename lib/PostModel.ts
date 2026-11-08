@@ -18,6 +18,7 @@ const PostSchema = new Schema(
             type: [String],
             required: true,
         },
+        image: String, // id of the cover image (lib/ImageModel.ts), if it has one
     },
     { timestamps: true },
 );

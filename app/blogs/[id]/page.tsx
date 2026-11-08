@@ -2,6 +2,7 @@ import type { PostType } from "@/app/post/actions";
 import { redirect } from "next/navigation";
 import Post from "@/lib/PostModel";
 import dbConnect from "@/lib/mongoose";
+import Cover from "@/components/Cover";
 
 async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -10,16 +11,21 @@ async function Page({ params }: { params: Promise<{ id: string }> }) {
   if (!post) redirect("/");
 
   return (
-    <div>
-      <h1>{post.title}</h1>
-      <div>{post.date.toLocaleDateString()}</div>
+    <main className="w-full max-w-2xl mx-auto px-4 pb-10">
+      <Cover
+        big
+        image={post.image}
+        className="mt-10 mb-6"
+        title={post.title}
+        sub={post.date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+      />
       {/* keep the line breaks and spaces as typed (HTML squashes them into one space otherwise) */}
-      <div className="whitespace-pre-wrap">
+      <div className="flex flex-col gap-4 whitespace-pre-wrap leading-relaxed">
         {post.content.map((paragraph, i) => (
           <p key={i}>{paragraph}</p>
         ))}
       </div>
-    </div>
+    </main>
   );
 }
 

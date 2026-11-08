@@ -5,8 +5,9 @@ import { revalidatePath } from "next/cache";
 import { initAuth, ADMIN_EMAILS } from "@/lib/auth";
 import dbConnect from "@/lib/mongoose";
 import Project from "@/lib/ProjectModel";
+import { isImageId } from "@/lib/ImageModel";
 
-export type ProjectType = { key: string; name: string; when: string; about: string; links: { label: string; href: string }[] };
+export type ProjectType = { key: string; name: string; when: string; about: string; links: { label: string; href: string }[]; image?: string };
 
 const text = (s: unknown, max: number) => (typeof s === "string" ? s.slice(0, max) : "");
 // only real web links: a "javascript:" link would run code for whoever clicks it
@@ -21,7 +22,10 @@ export async function saveProject(project: ProjectType) {
         .map((l) => ({ label: text(l?.label, 60).trim(), href: text(l?.href, 500).trim() }))
         .filter((l) => l.label && l.href);
     if (links.some((l) => !webLink(l.href))) throw new Error("Links must start with http:// or https://");
+    const image = isImageId(project.image) ? project.image : undefined;
     await dbConnect();
-    await Project.findOneAndUpdate({ key }, { name, when: text(project.when, 200), about: text(project.about, 5000), links }, { upsert: true });
+    await Project.findOneAndUpdate({ key },
+        { name, when: text(project.when, 200), about: text(project.about, 5000), links, ...(image ? { image } : { $unset: { image: 1 } }) },
+        { upsert: true });
     revalidatePath("/projects");
 }

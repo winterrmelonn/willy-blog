@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { saveProject, type ProjectType } from "@/app/projects/actions";
+import ImagePicker from "./ImagePicker";
+import Cover from "./Cover";
 
 const field = "w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-transparent px-3 py-2";
 const pill = "rounded-full px-4 py-1.5 text-sm hover:opacity-80 disabled:opacity-50";
@@ -28,33 +30,34 @@ export default function ProjectCard({ project, admin }: { project: ProjectType; 
     }
 
     if (!editing) return (
-        <li className="relative rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5">
+        <li className="relative overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800">
             {admin && (
-                <button type="button" className={`absolute right-3 top-3 border border-zinc-200 dark:border-zinc-800 ${pill}`}
+                <button type="button" className={`absolute right-3 top-3 z-10 border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-black/60 backdrop-blur ${pill}`}
                     onClick={() => { setDraft(project); setEditing(true); }}>
                     Edit
                 </button>
             )}
-            <div className={`flex flex-wrap items-baseline gap-x-2 ${admin ? "pr-16" : ""}`}>
-                <h2 className="text-xl font-bold">{project.name}</h2>
-                <span className="text-sm text-zinc-500">{project.when}</span>
+            {/* the cover image, with the name and date in its top left (or just those, without one) */}
+            <Cover image={project.image} title={<h2>{project.name}</h2>} sub={project.when} className={project.image ? "" : `px-5 pt-5 ${admin ? "pr-20" : ""}`} />
+            <div className="px-5 pb-5">
+                <p className="mt-2 leading-relaxed whitespace-pre-wrap">{project.about}</p>
+                {project.links.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                        {project.links.map((l) => (
+                            <a key={l.href} href={l.href} target="_blank" rel="noreferrer"
+                                className="rounded-full px-4 py-1.5 text-sm border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors">
+                                {l.label} ↗
+                            </a>
+                        ))}
+                    </div>
+                )}
             </div>
-            <p className="mt-2 leading-relaxed whitespace-pre-wrap">{project.about}</p>
-            {project.links.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-2">
-                    {project.links.map((l) => (
-                        <a key={l.href} href={l.href} target="_blank" rel="noreferrer"
-                            className="rounded-full px-4 py-1.5 text-sm border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors">
-                            {l.label} ↗
-                        </a>
-                    ))}
-                </div>
-            )}
         </li>
     );
 
     return (
         <li className="flex flex-col gap-2 rounded-2xl border border-zinc-300 dark:border-zinc-700 p-5">
+            <ImagePicker value={draft.image} onChange={(image) => setDraft({ ...draft, image })} />
             <input aria-label="Name" className={`${field} text-xl font-bold`} value={draft.name}
                 onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
             <input aria-label="Year and event" placeholder="2026 · Hackathon name" className={`${field} text-sm`} value={draft.when}

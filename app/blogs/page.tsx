@@ -5,6 +5,7 @@ import { initAuth, ADMIN_EMAILS } from "@/lib/auth";
 import { headers } from "next/headers";
 import Link from "next/link";
 import PostMenu from "@/components/PostMenu";
+import Cover from "@/components/Cover";
 
 async function Page() {
   await dbConnect();
@@ -19,17 +20,18 @@ async function Page() {
         <ul className="flex flex-col gap-3">
           {allPosts.map((post) => (
             // a bubble per post; the whole bubble opens the post (the title link stretches over it)
-            <li key={post.id} className="relative rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 pr-12 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-950">
-              <div className="flex items-baseline gap-1.5">
-                <Link href={`/blogs/${post.id}`} className="font-bold after:absolute after:inset-0 after:rounded-2xl">
-                  {post.title}
-                </Link>
-                <span className="shrink-0 text-sm text-zinc-500">
-                  · {post.date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                </span>
+            <li key={post.id} className="relative overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-950">
+              <Cover
+                image={post.image}
+                className={post.image ? "" : "px-4 pt-4 pr-12"}
+                title={<Link href={`/blogs/${post.id}`} className="after:absolute after:inset-0 after:rounded-2xl">{post.title}</Link>}
+                sub={post.date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+              />
+              {/* padding goes on a wrapper: on the clamped paragraph itself, the cut-off line shows through it */}
+              <div className="px-4 pb-4 pt-2">
+                <p className="line-clamp-4 whitespace-pre-wrap text-[15px] leading-snug">{post.content.join("\n\n")}</p>
               </div>
-              <p className="mt-1 line-clamp-4 whitespace-pre-wrap text-[15px] leading-snug">{post.content.join("\n\n")}</p>
-              {admin && <PostMenu id={post.id} title={post.title} />}
+              {admin && <PostMenu id={post.id} title={post.title} image={post.image} />}
             </li>
           ))}
         </ul>

@@ -1,13 +1,30 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { deletePost } from "@/app/post/actions";
+import { deletePost, setPostImage } from "@/app/post/actions";
+import { shrinkAndUpload } from "./ImagePicker";
 
-// The ⋯ in the top right of a post bubble, with a Delete option (admins only; deletePost checks too).
-export default function PostMenu({ id, title }: { id: string; title: string }) {
+// The ⋯ in the top right of a post bubble: add, change or remove its cover image, or delete it
+// (admins only; the actions check too).
+export default function PostMenu({ id, title, image }: { id: string; title: string; image?: string }) {
     const [open, setOpen] = useState(false);
     const [deleting, setDeleting] = useState(false);
+    const [uploading, setUploading] = useState(false);
     const root = useRef<HTMLDivElement>(null);
+    const file = useRef<HTMLInputElement>(null);
+
+    async function cover(picked: File | undefined | null) { // a new image (picked), or none (null)
+        if (picked === undefined) return;
+        setUploading(true);
+        try {
+            await setPostImage(id, picked ? await shrinkAndUpload(picked) : undefined);
+            setOpen(false);
+        } catch {
+            alert("Couldn't change the image.");
+        }
+        setUploading(false);
+        if (file.current) file.current.value = "";
+    }
 
     // close on Escape or a click anywhere else
     useEffect(() => {
@@ -40,8 +57,8 @@ export default function PostMenu({ id, title }: { id: string; title: string }) {
                 aria-label="Post options"
                 aria-expanded={open}
                 onClick={() => setOpen(!open)}
-                className={`flex h-7 w-7 items-center justify-center gap-[2px] rounded-full text-zinc-500 transition-colors
-                    hover:bg-zinc-100 dark:hover:bg-zinc-900 ${open ? "bg-zinc-100 dark:bg-zinc-900" : ""}`}
+                className={`flex h-7 w-7 items-center justify-center gap-[2px] rounded-full text-zinc-600 dark:text-zinc-300 transition-colors
+                    bg-white/80 dark:bg-black/60 backdrop-blur hover:bg-zinc-100 dark:hover:bg-zinc-900 ${open ? "bg-zinc-100 dark:bg-zinc-900" : ""}`}
             >
                 {[0, 1, 2].map((i) => (
                     <span key={i} className="h-[3px] w-[3px] rounded-full bg-current" />
@@ -53,6 +70,17 @@ export default function PostMenu({ id, title }: { id: string; title: string }) {
                     bg-white dark:bg-zinc-950 p-1 shadow-lg transition-[opacity,transform] duration-200 ease-[cubic-bezier(.3,.7,.4,1)]
                     ${open ? "opacity-100 scale-100" : "pointer-events-none opacity-0 scale-90"}`}
             >
+                <input ref={file} type="file" accept="image/*" className="hidden" onChange={(e) => cover(e.target.files?.[0])} />
+                <button type="button" disabled={uploading} onClick={() => file.current?.click()}
+                    className="w-full rounded-lg px-3 py-1.5 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-900 disabled:opacity-50">
+                    {uploading ? "Uploading…" : image ? "Change image" : "Add image"}
+                </button>
+                {image && (
+                    <button type="button" disabled={uploading} onClick={() => cover(null)}
+                        className="w-full rounded-lg px-3 py-1.5 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-900 disabled:opacity-50">
+                        Remove image
+                    </button>
+                )}
                 <button
                     type="button"
                     disabled={deleting}

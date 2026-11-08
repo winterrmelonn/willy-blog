@@ -3,6 +3,7 @@
 import type { PostType } from "@/app/post/actions";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import ImagePicker from "./ImagePicker";
 
 const submit = "rounded-full px-5 py-2 bg-black dark:bg-white text-white dark:text-black hover:opacity-80 disabled:opacity-50";
 const field = "w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-transparent px-3 py-2";
@@ -44,6 +45,8 @@ function PostForm({
 
     return (
         <form onSubmit={handleSubmit} className="my-3 flex flex-col gap-3">
+            {/* a cover image above the post (admins only: uploads aren't open to visitors) */}
+            {!request && <ImagePicker value={newPost.image} onChange={(image) => setNewPost({ ...newPost, image })} />}
             <input
                 type="text"
                 placeholder="Title"
