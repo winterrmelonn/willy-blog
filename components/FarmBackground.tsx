@@ -33,9 +33,10 @@ const SW = 520, SH = 300, BED = 215; // lettuce sprite size and where the tray s
 // The hues run from yellow-lime through fresh green to deep and blue-green, like a real crop at different ages.
 const VARIETIES = [[0, 92, 60, 4], [1, 84, 66, 10], [0, 104, 52, -6], [2, 98, 56, 0], [0, 80, 68, 12], [3, 96, 58, 6], [1, 112, 44, -8], [2, 88, 62, 4]] as const;
 
-// A tray's worth of lettuce: a few heads of layered, ruffled leaves, outer leaves first and pale hearts last.
-// Every leaf gets its own shade, length, width, bend and lean, and each ring is drawn in a shuffled order, so the
-// overlaps never repeat; some leaves catch the light (paler, yellower) and some are folded edge-on.
+// A tray's worth of lettuce: a few heads of ruffled, veined leaves, each with its own shade, length, width and bend;
+// some catch the light (paler, yellower) and some are folded edge-on. The heads are built in 3D like the home page's
+// tree clumps: every leaf points its own way around the head, so the ones aimed at you are foreshortened and the ones
+// aimed sideways show narrow, and they're drawn back to front with the far side in shade around a dim core.
 function lettuceSprite([kind, baseHue, sat, lift]: (typeof VARIETIES)[number], seed: number) {
     const c = document.createElement("canvas");
     c.width = SW * 2; c.height = SH * 2; // 2x: the nearest trays get drawn large
@@ -76,24 +77,42 @@ function lettuceSprite([kind, baseHue, sat, lift]: (typeof VARIETIES)[number], s
         g.stroke();
     };
 
+    type Leaf = { depth: number; draw: () => void };
     const head = (hx: number, r: number) => {
         const romaine = kind === 2, loose = kind === 1;
-        const hueShift = jit(8), lightShift = jit(6), lean = jit(0.22); // each head its own shade and lean
-        const rings = [[16, 1, 36, 10], [12, 0.78, 48, 4], [9, 0.55, 62, -6]] as const; // count, size, lightness, hue offset (deep out, lime in)
-        for (const [count, size, light, hueOff] of rings) {
-            const slots = [...Array(count).keys()].sort(() => rnd() - 0.5); // shuffled, so overlaps differ
-            for (const i of slots) {
-                const spread = romaine ? 1.4 : size === 1 ? (loose ? 4.2 : 3.9) : 3.2; // outer leaves reach past horizontal and droop
-                const a = -Math.PI / 2 + lean + (i / (count - 1) - 0.5) * spread + jit(0.45);
+        const hueShift = jit(8), lightShift = jit(6); // each head its own shade
+        const leaves: Leaf[] = [];
+        // rings from outside in: [count, size, lightness, hue offset, lowest and highest elevation (radians above flat)]
+        const rings = [[20, 1, 36, 10, -0.35, 0.45], [15, 0.78, 48, 4, 0.25, 0.95], [11, 0.55, 62, -6, 0.75, 1.35]] as const;
+        for (const [count, size, light, hueOff, elLo, elHi] of rings) {
+            for (let i = 0; i < count; i++) {
+                // a direction in 3D around the head: azimuth all the way round, elevation by ring (romaine stands up)
+                const phi = rnd() * Math.PI * 2, el = (romaine ? 0.45 : 0) + elLo + rnd() * (elHi - elLo);
+                const ax = Math.cos(phi) * Math.cos(el), az = Math.sin(phi) * Math.cos(el), ay = Math.sin(el);
+                const reach = Math.max(0.3, Math.hypot(ax, ay));                   // foreshortened when aimed at you
                 const len = r * size * (romaine ? 1.35 : loose ? 1.12 : 1) * (0.7 + rnd() * 0.45);
                 const folded = rnd() < 0.18, sunlit = rnd() < 0.16;
-                const wd = len * (folded ? 0.24 : (romaine ? 0.36 : 0.55) + rnd() * 0.3);
-                leaf(hx + jit(r * 0.14), BED - 4 + jit(3), a, len, wd, jit(loose ? 0.45 : 0.3),
-                    baseHue + hueOff + hueShift + jit(12) - (sunlit ? 10 : 0),
-                    sat + jit(10), light + lift + lightShift + jit(8) + (sunlit ? 16 : 0) + (folded ? 8 : 0));
+                const face = 0.4 + 0.6 * Math.abs(Math.sin(phi));                 // aimed sideways: seen edge-on, narrower
+                const wd = len * (folded ? 0.24 : (romaine ? 0.36 : 0.55) + rnd() * 0.3) * face;
+                const back = az < 0 ? -9 : 0;                                       // far side of the head sits in shade
+                const a = Math.atan2(-ay, ax), x0 = hx + jit(r * 0.12) + ax * r * 0.08, y0 = BED - 4 + jit(3);
+                const hue = baseHue + hueOff + hueShift + jit(12) - (sunlit ? 10 : 0), sa = sat + jit(10);
+                const li = light + lift + lightShift + jit(8) + (sunlit ? 16 : 0) + (folded ? 8 : 0) + back;
+                const bend = jit(loose ? 0.45 : 0.3);
+                leaves.push({ depth: az, draw: () => leaf(x0, y0, a, len * reach, wd, bend, hue, sa, li) });
             }
         }
-        for (let i = 0; i < 6; i++) leaf(hx, BED - 6, -Math.PI / 2 + lean + jit(0.8), r * (0.26 + rnd() * 0.12), r * (0.22 + rnd() * 0.12), jit(0.3), baseHue - 12 + jit(6), sat + 6, 72 + jit(6)); // heart
+        leaves.sort((p, q) => p.depth - q.depth); // back to front
+        let cored = false;
+        for (const l of leaves) {
+            if (!cored && l.depth > 0) { // the dim core, between the back leaves and the front ones
+                g.fillStyle = `hsl(${baseHue + 10} ${sat - 12}% ${24 + lift * 0.5}%)`;
+                g.beginPath(); g.ellipse(hx, BED - r * 0.22, r * 0.42, r * 0.28, 0, 0, Math.PI * 2); g.fill();
+                cored = true;
+            }
+            l.draw();
+        }
+        for (let i = 0; i < 6; i++) leaf(hx, BED - 6, -Math.PI / 2 + jit(0.8), r * (0.26 + rnd() * 0.12), r * (0.22 + rnd() * 0.12), jit(0.3), baseHue - 12 + jit(6), sat + 6, 72 + jit(6)); // heart
     };
 
     const n = kind === 3 ? 4 : 3;
@@ -142,7 +161,7 @@ export default function FarmBackground({ kick }: { kick: RefObject<number> }) {
         const heads = VARIETIES.map((v, k) => { const base = lettuceSprite(v, 4321 + k * 811); return FOG_LEVELS.map((t) => (t ? fogged(base, t) : base)); });
         const mouse = { x: 0, y: 0, tx: 0, ty: 0 };
         const pollen = Array.from({ length: 70 }, () => ({ x: Math.random(), y: Math.random(), r: 0.6 + Math.random() * 1.8, v: 0.004 + Math.random() * 0.012 }));
-        let w = 0, h = 0, d = 1, vx = 0, vy = 0, backdrop: HTMLCanvasElement, raf = 0, last = performance.now(), cam = 0, boost = 0, seen = kick.current;
+        let w = 0, h = 0, d = 1, vx = 0, vy = 0, backdrop: HTMLCanvasElement, raf = 0, last = performance.now(), time = 0, cam = 0, boost = 0, seen = kick.current;
 
         const size = () => {
             d = Math.min(devicePixelRatio, 2);
@@ -254,7 +273,8 @@ export default function FarmBackground({ kick }: { kick: RefObject<number> }) {
                             if (fade <= 0) return;
                             const zm = z + TRAY * 0.45, [sx, sy] = P(xi + side * 0.62, y, zm);
                             const sw = (1.6 * f) / zm, sh = (sw * SH) / SW, r1 = hash(k, ti * 2 + side), r2 = hash(ti + side * 3, k * 1.7);
-                            const sc = 0.88 + r2 * 0.24, flip = hash(k * 5, ti + side) < 0.5 ? -1 : 1, rot = (hash(k * 3, ti * 7 + side) - 0.5) * 0.1;
+                            const sc = 0.88 + r2 * 0.24, flip = hash(k * 5, ti + side) < 0.5 ? -1 : 1;
+                            const rot = (hash(k * 3, ti * 7 + side) - 0.5) * 0.1 + Math.sin(time * 1.8 + k * 2.4 + ti * 1.3 + side) * 0.018; // + a breeze, like the home page's trees
                             const cs = Math.cos(rot) * sc, sn = Math.sin(rot) * sc;
                             cx.globalAlpha = fade;
                             cx.setTransform(d * cs * flip, d * sn * flip, -d * sn, d * cs, d * sx, d * sy);
@@ -307,7 +327,7 @@ export default function FarmBackground({ kick }: { kick: RefObject<number> }) {
         const frame = (now: number) => {
             raf = requestAnimationFrame(frame);
             const dt = Math.min(0.05, (now - last) / 1000);
-            last = now;
+            last = now; time += dt;
             if (kick.current !== seen) { seen = kick.current; boost = 9; }
             boost *= 0.95 ** (dt * 60);
             cam += dt * 0.45 * (1 + boost);
