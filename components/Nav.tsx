@@ -4,7 +4,8 @@ import UiMenu from "./UiMenu";
 import { initAuth, ADMIN_EMAILS } from "@/lib/auth";
 
 async function Nav() {
-  // Post only shows for admins (app/post/page.tsx and postBlog check again, so hiding it is just tidiness)
+  // Wardrobe only shows for admins (its page and actions check again, so hiding it is just tidiness).
+  // Posting a blog is a button beside My Blogs on /blogs.
   const session = await (await initAuth()).api.getSession({ headers: await headers() });
   const admin = !!session && ADMIN_EMAILS.includes(session.user.email);
   const box = "rounded-md px-2.5 py-1 text-xs text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-zinc-100 dark:hover:bg-zinc-900 transition-colors";
@@ -18,13 +19,11 @@ async function Nav() {
         <Link href="/blogs" className={box}>Blogs</Link>
         <Link href="/projects" className={box}>Projects</Link>
         <Link href="/rustbreeder" className={box}>Rustbreeder</Link>
-        {admin && <Link href="/post" className={box}>Post</Link>}
         {admin && <Link href="/wardrobe" className={box}>Wardrobe</Link>}
         {admin && <Link href="/followback" className={box}>Instagram</Link>}
         {/* plain <a>: /sat is a route handler serving a standalone page, not a React page */}
         {admin && <a href="/sat" className={box}>SAT</a>}
         <Link href="/calendar" className={box}>Calendar</Link>
-        <Link href="/about" className={box}>About</Link>
         <Link href="/profile" className={box}>Profile</Link>
       </nav>
     </header>
