@@ -1,0 +1,159 @@
+/* Rudimentary Intelligence – Rustbreeder (components/Rustbreeder.tsx): a security-camera HUD floating over a
+   vertical farm (components/FarmBackground.tsx). Full screen like the wardrobe, so it brings its own way back.
+   Everything is nested under .rb so none of it reaches the rest of the site; keyframes are prefixed rb-. */
+.rb {
+  --ink: #142219; --dim: #5f7065; --lime: #c8fa1e; --leaf: #3f9a3a;
+  --glass: rgba(255,255,255,.55); --edge: rgba(255,255,255,.85); --line: rgba(20,34,25,.12);
+  --sans: var(--rb-sans), system-ui, sans-serif; --mono: var(--rb-mono), ui-monospace, monospace;
+  --ease: cubic-bezier(.16,1,.3,1);
+  position: fixed; inset: 0; z-index: 100; overflow-y: auto; overflow-x: hidden;
+  background: #eef3ec; color: var(--ink);
+  font: 11px/1.6 var(--mono); letter-spacing: .07em; text-transform: uppercase;
+  -webkit-font-smoothing: antialiased;
+
+  & ::selection { background: var(--lime); color: var(--ink) }
+  & :focus-visible { outline: 1px solid var(--ink); outline-offset: 3px }
+  & p { margin: 0 }
+  & .dim { color: var(--dim) }
+  & button { font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; cursor: pointer }
+
+  /* ---------- scene ---------- */
+  & .farm { position: fixed; inset: 0; width: 100%; height: 100%; animation: rb-focus 2.4s var(--ease) both }
+  /* haze on the left so the log reads cleanly over the racks */
+  & .mist { position: fixed; inset: 0; pointer-events: none;
+    background: linear-gradient(90deg, rgba(246,249,245,.62), rgba(246,249,245,.2) 38%, transparent 60%) }
+  /* camera framing that closes in while it focuses, then gets out of the way */
+  & .reticle { position: fixed; left: 50%; top: 50%; width: 30vmin; height: 30vmin; translate: -50% -50%; pointer-events: none;
+    animation: rb-frame 2.2s var(--ease) forwards }
+  & .reticle i { position: absolute; width: 22px; height: 22px; border: solid var(--ink) }
+  & .reticle i:nth-child(1) { top: 0; left: 0; border-width: 1.5px 0 0 1.5px }
+  & .reticle i:nth-child(2) { top: 0; right: 0; border-width: 1.5px 1.5px 0 0 }
+  & .reticle i:nth-child(3) { bottom: 0; left: 0; border-width: 0 0 1.5px 1.5px }
+  & .reticle i:nth-child(4) { bottom: 0; right: 0; border-width: 0 1.5px 1.5px 0 }
+
+  /* ---------- HUD ---------- */
+  & .hud { position: relative; z-index: 1; min-height: 100%; display: grid; gap: 28px 56px; padding: 24px 36px;
+    grid-template-columns: minmax(320px, 440px) minmax(0, 1fr); grid-template-rows: 1fr auto; grid-template-areas: "left right" "foot right" }
+  & .left { grid-area: left; display: flex; flex-direction: column; gap: 16px; align-items: flex-start }
+  & .right { grid-area: right; display: flex; flex-direction: column; align-items: flex-end; gap: 24px; padding-top: 52px }
+  & .foot { grid-area: foot; display: flex; align-items: flex-end; gap: 18px }
+
+  /* everything arrives as the camera settles */
+  & .in { opacity: 0; animation: rb-in .9s var(--ease) forwards; animation-delay: calc(.5s + var(--i, 0) * 150ms) }
+  & .type { clip-path: inset(0 100% 0 0); animation: rb-type .6s steps(22) forwards; animation-delay: calc(.6s + var(--i, 0) * 150ms) }
+  & .caret::after { content: "_"; animation: rb-blink 1s steps(1) infinite }
+
+  & .back { padding: 6px 12px; border-radius: 99px; background: var(--glass); border: 1px solid var(--edge); backdrop-filter: blur(12px);
+    color: var(--ink); text-decoration: none; transition: background .2s, color .2s }
+  & .back:hover { background: var(--ink); color: var(--lime) }
+
+  & header { display: flex; flex-direction: column; gap: 6px; margin-top: 18px }
+  & h1 { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; margin: 0 0 10px; font: 400 clamp(20px, 2.3vw, 28px)/1.15 var(--sans);
+    font-stretch: 118%; letter-spacing: .02em }
+  & h1 span { color: var(--leaf) }
+  & .mark { display: grid; grid-template-columns: 9px 9px; grid-template-rows: 9px 9px; gap: 0 }
+  & .mark i { background: var(--ink); border-radius: 2px }
+  & .mark i:nth-child(2) { grid-area: 2 / 2 }
+  & .blurb { max-width: 46ch; text-transform: none; letter-spacing: .02em; font-size: 12px; color: var(--dim) }
+  & .blurb a { color: var(--ink) }
+
+  & .glass { width: 100%; padding: 14px 16px; border-radius: 14px; background: var(--glass); border: 1px solid var(--edge);
+    backdrop-filter: blur(14px) saturate(1.3); box-shadow: 0 10px 30px rgba(40,70,45,.08) }
+  & .hd { display: flex; justify-content: space-between; gap: 12px; padding-bottom: 8px; margin-bottom: 10px; border-bottom: 1px solid var(--line) }
+
+  & .row { display: flex; align-items: center; gap: 10px }
+  & input { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: rgba(255,255,255,.7);
+    color: var(--ink); font: 600 15px var(--mono); letter-spacing: .3em; text-transform: uppercase }
+  & input::placeholder { color: #b5c2b8 }
+  & input:focus { outline: none; border-color: var(--leaf) }
+  & .add { padding: 8px 14px; border: 0; border-radius: 8px; background: var(--ink); color: var(--lime) }
+  & .add:hover { background: var(--leaf); color: #fff }
+  & .err { margin-top: 8px; color: #c63c2e }
+  & .err:empty { display: none }
+
+  & .log { list-style: none; margin: 0 0 12px; padding: 0 }
+  & .log li { display: grid; grid-template-columns: 2.5ch auto 1fr 3.5ch auto auto; align-items: center; gap: 10px; padding: 5px 0;
+    animation: rb-in .5s var(--ease) both }
+  & .log li + li { border-top: 1px dashed var(--line) }
+  & .log .vec { font-size: 10px; white-space: nowrap; overflow: hidden }
+  & .log button { padding: 2px 7px; border-radius: 6px; border: 1px solid var(--line); background: rgba(255,255,255,.6); color: var(--dim) }
+  & .log button:hover { color: var(--ink); border-color: var(--ink) }
+  & .sc { font-weight: 600 }
+
+  & .finalize { display: flex; justify-content: space-between; width: 100%; margin-top: 4px; padding: 12px 14px; border: 0; border-radius: 10px;
+    background: var(--ink); color: var(--lime); font-weight: 600; transition: background .2s, color .2s }
+  & .finalize .dim { color: #8fa596 }
+  & .finalize:hover:not(:disabled) { background: var(--lime); color: var(--ink) }
+  & .finalize:hover:not(:disabled) .dim { color: var(--ink) }
+  & .finalize:disabled { opacity: .35; cursor: not-allowed }
+
+  /* gene chips */
+  & .tiles { display: inline-flex; gap: 2px }
+  & .tiles span { display: grid; place-items: center; width: 15px; height: 17px; border-radius: 4px; color: #fff; font-weight: 600; font-size: 10px; letter-spacing: 0 }
+  & .G { background: var(--leaf) } & .Y { background: #e2bf28; color: #3d3100 !important } & .H { background: #3a96d4 }
+  & .W { background: #df5240 } & .X { background: #aab6ae }
+
+  /* gene reference: a ⋯ button pinned top right that drops the table open */
+  & .menu { position: fixed; top: 24px; right: 36px; z-index: 3; display: flex; flex-direction: column; align-items: flex-end; gap: 8px }
+  & .menu summary { display: flex; align-items: center; justify-content: center; gap: 4px; width: 44px; height: 32px; border-radius: 99px; cursor: pointer;
+    list-style: none; background: var(--glass); border: 1px solid var(--edge); backdrop-filter: blur(12px); transition: background .2s }
+  & .menu summary::-webkit-details-marker { display: none }
+  & .menu summary i { width: 4px; height: 4px; border-radius: 50%; background: var(--ink); transition: background .2s }
+  & .menu summary:hover, & .menu[open] summary { background: var(--ink) }
+  & .menu summary:hover i, & .menu[open] summary i { background: var(--lime) }
+  & .menu[open] .table { animation: rb-in .4s var(--ease) both }
+  & .table { max-width: min(520px, calc(100vw - 32px)); overflow-x: auto; padding: 12px 14px; border-radius: 14px; background: rgba(255,255,255,.75);
+    border: 1px solid var(--edge); backdrop-filter: blur(14px) saturate(1.3); box-shadow: 0 10px 30px rgba(40,70,45,.12) }
+  & table { border-collapse: collapse; margin-bottom: 8px }
+  & th { padding: 0 14px 4px 0; text-align: left; font-weight: 400; color: var(--dim); border-bottom: 1px solid var(--line) }
+  & td { padding: 3px 14px 3px 0 }
+  & .table > p { max-width: 52ch; text-transform: none; letter-spacing: .02em }
+  & .chip { padding: 1px 6px; border-radius: 4px }
+  & .chip.Priority { background: rgba(200,250,30,.75) } & .chip.Neutral { background: rgba(58,150,212,.2) } & .chip.Purge { background: rgba(223,82,64,.2) }
+
+  /* ---------- finalize reveal ---------- */
+  & .result { position: relative; overflow: hidden; max-width: 680px; animation: rb-in .6s var(--ease) both }
+  & .result::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--lime);
+    box-shadow: 0 0 18px 4px rgba(200,250,30,.7); animation: rb-scan 1.1s .1s var(--ease) forwards; pointer-events: none }
+  & .grids { display: flex; flex-wrap: wrap; gap: 18px }
+  & .grids > div { flex: 1 1 260px }
+  & .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px }
+  & .cell { position: relative; height: 62px; container-type: inline-size; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+    border-radius: 10px; background: rgba(255,255,255,.5); border: 1px solid var(--line);
+    opacity: 0; animation: rb-flicker .45s steps(1) forwards; animation-delay: calc(.3s + var(--i) * 60ms) }
+  & .grid.out .cell { animation-delay: calc(.75s + var(--i) * 60ms) }
+  & .cell.on { background: rgba(255,255,255,.85); border-color: rgba(63,154,58,.45) }
+  & .cell .tiles span { width: min(15px, 14cqi); height: min(17px, 16cqi); font-size: min(10px, 9cqi) }
+  & .cell .pos { position: absolute; top: 3px; left: 7px; font-size: 9px; color: var(--dim) }
+  & .cell .none { color: #b5c2b8 }
+
+  /* big pixel counter, like the stencil numbers on the racks */
+  & .pixels { display: flex; gap: 10px }
+  & .pixels span { display: grid; grid-template-columns: repeat(3, 14px); grid-auto-rows: 14px; gap: 3px }
+  & .pixels i { border-radius: 2px }
+  & .pixels i.on { background: rgba(20,34,25,.7) }
+
+  @media (max-width: 860px) {
+    & .hud { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; grid-template-areas: "left" "right" "foot"; padding: 16px; gap: 20px }
+    & .right { align-items: stretch; padding-top: 0 }
+    & .right:empty { display: none }
+    & .menu { top: 16px; right: 16px }
+    & .mist { background: rgba(246,249,245,.55) }
+    & .pixels span { grid-template-columns: repeat(3, 9px); grid-auto-rows: 9px; gap: 2px }
+    & .log li { grid-template-columns: 2.5ch auto 1fr auto auto }
+    & .log .vec { display: none }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    & .reticle { display: none }
+    & *, & *::before, & *::after { animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important }
+  }
+}
+
+@keyframes rb-focus { from { filter: blur(18px) brightness(1.2); transform: scale(1.15) } to { filter: none; transform: none } }
+@keyframes rb-frame { 0% { width: 80vmin; height: 80vmin; opacity: 0 } 15% { opacity: 1 } 75% { width: 26vmin; height: 26vmin; opacity: 1 } 100% { width: 24vmin; height: 24vmin; opacity: 0 } }
+@keyframes rb-in { from { opacity: 0; transform: translateY(10px); filter: blur(4px) } to { opacity: 1; transform: none; filter: none } }
+@keyframes rb-type { to { clip-path: inset(0 0 0 0) } }
+@keyframes rb-blink { 50% { opacity: 0 } }
+@keyframes rb-scan { from { top: 0; opacity: 1 } 85% { opacity: 1 } to { top: 100%; opacity: 0 } }
+@keyframes rb-flicker { 0% { opacity: .5 } 25% { opacity: 0 } 50% { opacity: .8 } 70% { opacity: .2 } 100% { opacity: 1 } }
