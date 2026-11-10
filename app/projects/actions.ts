@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { initAuth, ADMIN_EMAILS } from "@/lib/auth";
 import dbConnect from "@/lib/mongoose";
 import Project from "@/lib/ProjectModel";
-import { isImageId } from "@/lib/ImageModel";
+import { isImageId, deleteUnusedImage } from "@/lib/ImageModel";
 
 export type ProjectType = { key: string; name: string; when: string; about: string; links: { label: string; href: string }[]; image?: string };
 
@@ -24,8 +24,9 @@ export async function saveProject(project: ProjectType) {
     if (links.some((l) => !webLink(l.href))) throw new Error("Links must start with http:// or https://");
     const image = isImageId(project.image) ? project.image : undefined;
     await dbConnect();
-    await Project.findOneAndUpdate({ key },
+    const old = await Project.findOneAndUpdate({ key },
         { name, when: text(project.when, 200), about: text(project.about, 5000), links, ...(image ? { image } : { $unset: { image: 1 } }) },
         { upsert: true });
+    if (old?.image !== image) await deleteUnusedImage(old?.image);
     revalidatePath("/projects");
 }

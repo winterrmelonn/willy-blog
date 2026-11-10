@@ -3,7 +3,7 @@
 import { headers } from "next/headers";
 import { initAuth, ADMIN_EMAILS } from "@/lib/auth";
 import dbConnect from "@/lib/mongoose";
-import Image from "@/lib/ImageModel";
+import Image, { deleteUnusedImage } from "@/lib/ImageModel";
 
 const TYPES = ["image/webp", "image/jpeg", "image/png"]; // no SVG: it can carry scripts
 
@@ -17,4 +17,12 @@ export async function uploadImage(form: FormData) {
     await dbConnect();
     const saved = await Image.create({ data: Buffer.from(await file.arrayBuffer()), type: file.type });
     return String(saved._id);
+}
+
+// Admins: drop an image picked while editing but then replaced, removed, or cancelled (kept if something saved still uses it)
+export async function discardImage(id: string) {
+    const session = await (await initAuth()).api.getSession({ headers: await headers() });
+    if (!session || !ADMIN_EMAILS.includes(session.user.email)) throw new Error("Unauthorized");
+    await dbConnect();
+    await deleteUnusedImage(id);
 }
