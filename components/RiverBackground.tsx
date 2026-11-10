@@ -948,6 +948,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
             for (const q of chans) if (y >= q.top && y <= q.bottom) room = Math.min(room, c - (q.c - q.h), q.c + q.h - c);
         }
         const width = Math.max(0.35, ((Math.min(room, typical / 2) - 8) * wpp) / 1.72); // banks gone 8px before the posts
+        const shore = (1.12 * width) / wpp; // px from the middle to the waterline (ground() crosses 0 at about 1.12 across)
         ws.fill(width);
         for (let i = 0; i < n; i++) {
             data[i * 2] = THREE.DataUtils.toHalfFloat(xs[i]);
@@ -961,7 +962,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         uniforms.uPath.value = pathTex;
         uniforms.uPathRange.value.set(path.z0, 1 / (n * path.dz));
 
-        // Each post's line runs level with its title to the middle of the river (app/blogs/timeline.css; 30 is
+        // Each post's line runs level with its title to the water's edge (app/blogs/timeline.css; 30 is
         // its top there). Layout offsets, not getBoundingClientRect: a post may be mid drift-in, moved by a transform.
         for (const el of flow.querySelectorAll<HTMLElement>(".river-row > .reveal")) {
             const parent = (el.offsetParent as HTMLElement | null)?.getBoundingClientRect();
@@ -969,7 +970,8 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
             const left = parent.left + el.offsetLeft, right = left + el.offsetWidth, c = centre(parent.top + scrollY + el.offsetTop + 30);
             const toRight = c > (left + right) / 2;
             el.dataset.river = toRight ? "right" : "left";
-            el.style.setProperty("--reach", `${Math.round(Math.max(0, toRight ? c - right : left - c))}px`);
+            const edge = toRight ? c - shore : c + shore;
+            el.style.setProperty("--reach", `${Math.round(Math.max(0, toRight ? edge - right : left - edge))}px`);
         }
     }
 
@@ -1120,12 +1122,14 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
 }
 
 // The first screen and the way off it, separate from the scene so it works without WebGL. About me fades and
-// lifts away as you scroll (--hero-p, 0..1, on the page; app/blogs/timeline.css). Between the two views the camera is
-// mid-climb, which looks wrong to stop on, so My Blogs glides down to the river, and a scroll that comes to rest
-// partway is carried on, the way it was going, to About me or to the river. Any wheel, touch or key takes over.
+// lifts away as you scroll (--hero-p, 0..1, on the page; app/blogs/timeline.css). The only way down is My Blogs,
+// which glides through the camera's climb to the river: on the first screen, wheel, touch and keys don't scroll
+// (they nudge the button instead), unless About me is being edited. Down in the timeline the page scrolls as
+// usual; scroll back above it and the page glides back up to About me, so it never rests mid-climb.
 function heroScroll(hero: HTMLElement) {
     const easeInOut = (k: number) => (k < 0.5 ? 4 * k * k * k : 1 - (-2 * k + 2) ** 3 / 2);
-    let queued = false, glide = 0, gliding = false, touching = false, lastY = scrollY, dir = 1, rest = 0;
+    let queued = false, glide = 0, gliding = false, touching = false, touchY = 0, lastY = scrollY, dir = 1, rest = 0;
+    const link = hero.querySelector<HTMLAnchorElement>('a[href="#river-flow"]');
     function glideTo(to: number) {
         cancelAnimationFrame(glide);
         if (matchMedia("(prefers-reduced-motion: reduce)").matches) return scrollTo({ top: to, behavior: "instant" });
@@ -1139,10 +1143,13 @@ function heroScroll(hero: HTMLElement) {
         };
         glide = requestAnimationFrame(step);
     }
-    const takeOver = () => { cancelAnimationFrame(glide); gliding = false; };
-    function settle() {
+    const editing = () => !!hero.querySelector("input, textarea");
+    const locked = () => scrollY < hero.offsetHeight - 2 && !editing();
+    const nudge = () => { if (!gliding) link?.classList.add("river-nudge"); };
+    const unNudge = () => link?.classList.remove("river-nudge");
+    function settle() { // a scroll that came to rest mid-climb (the scrollbar, momentum) goes on the way it was going
         const h = hero.offsetHeight;
-        if (gliding || touching || hero.querySelector("input, textarea")) return; // not while About me is being edited
+        if (gliding || touching || editing()) return;
         if (scrollY > 2 && scrollY < h - 2) glideTo(dir > 0 ? h : 0);
     }
     const later = () => { clearTimeout(rest); rest = window.setTimeout(settle, 160); };
@@ -1158,29 +1165,48 @@ function heroScroll(hero: HTMLElement) {
             (hero.parentElement ?? hero).style.setProperty("--hero-p", clamp01(scrollY / Math.max(hero.offsetHeight, 1)).toFixed(4));
         });
     };
+    const onWheel = (e: WheelEvent) => {
+        if (!locked() || e.ctrlKey) return; // ctrl: pinch-zooming
+        e.preventDefault();
+        if (e.deltaY > 0) nudge();
+    };
+    const KEYS = new Set([" ", "PageDown", "PageUp", "ArrowDown", "ArrowUp", "End", "Home"]);
+    const onKey = (e: KeyboardEvent) => {
+        if (!locked() || !KEYS.has(e.key) || (e.target as HTMLElement).closest?.("input, textarea, select, button, [contenteditable]")) return;
+        e.preventDefault();
+        if (!["ArrowUp", "PageUp", "Home"].includes(e.key)) nudge();
+    };
     const onTouch = (e: TouchEvent) => {
         touching = e.type === "touchstart";
-        if (touching) takeOver();
+        if (touching) touchY = e.touches[0]?.clientY ?? 0;
         else later();
     };
-    const link = hero.querySelector<HTMLAnchorElement>('a[href="#river-flow"]');
+    const onTouchMove = (e: TouchEvent) => {
+        if (!locked() || e.touches.length > 1 || !e.cancelable) return; // two fingers: pinch-zooming
+        e.preventDefault();
+        if (touchY - e.touches[0].clientY > 12) nudge();
+    };
     const onLink = (e: MouseEvent) => { e.preventDefault(); glideTo(hero.offsetHeight); };
     addEventListener("scroll", onScroll, { passive: true });
-    addEventListener("wheel", takeOver, { passive: true });
-    addEventListener("keydown", takeOver);
+    addEventListener("wheel", onWheel, { passive: false });
+    addEventListener("keydown", onKey);
     addEventListener("touchstart", onTouch, { passive: true });
     addEventListener("touchend", onTouch, { passive: true });
+    addEventListener("touchmove", onTouchMove, { passive: false });
     link?.addEventListener("click", onLink);
+    link?.addEventListener("animationend", unNudge);
     onScroll();
     return () => {
-        takeOver();
+        cancelAnimationFrame(glide);
         clearTimeout(rest);
         removeEventListener("scroll", onScroll);
-        removeEventListener("wheel", takeOver);
-        removeEventListener("keydown", takeOver);
+        removeEventListener("wheel", onWheel);
+        removeEventListener("keydown", onKey);
         removeEventListener("touchstart", onTouch);
         removeEventListener("touchend", onTouch);
+        removeEventListener("touchmove", onTouchMove);
         link?.removeEventListener("click", onLink);
+        link?.removeEventListener("animationend", unNudge);
     };
 }
 
