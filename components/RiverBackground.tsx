@@ -391,12 +391,13 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
     world.add(reeds);
 
     // ---- boulders: low-poly stones, wet below the waterline, the same ones on every visit
-    const rng = ((seed: number) => () => {
+    const seeded = (seed: number) => () => {
         seed = (seed + 0x6d2b79f5) | 0;
         let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
         t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
         return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    })(20260930);
+    };
+    const rng = seeded(20260930);
     world.add(new THREE.HemisphereLight(0xffffff, 0x445544, 1.0));
     const sunLight = new THREE.DirectionalLight(0xffffff, 1.1);
     sunLight.position.copy(uniforms.uLight.value).multiplyScalar(10);
@@ -715,6 +716,50 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         decor.add(pavilion);
     }
 
+    // ---- mountains far upstream, after Chinese landscape painting: tall, round-topped karst peaks in three
+    // ridges, each further one paler, their feet lost in the mist. They stand beyond the haze and the world's
+    // edge, so neither touches them; each has its own colour, fading to the mist towards the bottom.
+    const RIDGES = [ // distance upstream, tallest peak, how many peaks, colour [light, dark]
+        { z: -150, h: 17, n: 11, color: ["#b3c2b9", "#141c1b"] },
+        { z: -115, h: 12.5, n: 14, color: ["#93a89c", "#19231f"] },
+        { z: -85, h: 8, n: 18, color: ["#728a7d", "#1f2b27"] },
+    ];
+    const show = { value: 1 }; // the ridges fade out with the rest of the low view's scenery (draw)
+    const ridgeMats = RIDGES.map(({ z, h, n }, k) => {
+        const hill = seeded(808 + k), W = 460, SAMPLES = 480;
+        const peaks = Array.from({ length: n }, () => ({ c: (hill() - 0.5) * W, w: (6 + hill() * 12) * (h / 12), h: h * (0.45 + hill() * 0.55) }));
+        const pos: number[] = [], t: number[] = [], idx: number[] = [];
+        for (let i = 0; i <= SAMPLES; i++) {
+            const x = (i / SAMPLES - 0.5) * W;
+            let y = h * (0.18 + 0.04 * Math.sin(x * 0.05 + k)); // a low ridge joining the peaks
+            for (const p of peaks) { // steep sides, rounded tops
+                const u = (x - p.c) / p.w;
+                if (Math.abs(u) < 1) y = Math.max(y, p.h * Math.pow(1 - u * u, 0.35));
+            }
+            y += Math.sin(x * 1.3 + k * 5) * 0.12 + Math.sin(x * 3.1) * 0.06; // a ragged skyline
+            pos.push(x, -4, z, x, y, z);
+            t.push(-4 / h, y / h);
+            if (i < SAMPLES) { const a = i * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+        }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+        geo.setAttribute("aT", new THREE.Float32BufferAttribute(t, 1));
+        geo.setIndex(idx);
+        const mat = new THREE.ShaderMaterial({
+            uniforms: { uColor: { value: new THREE.Color() }, uFog: uniforms.uFog, uShow: show },
+            transparent: true, depthWrite: false,
+            vertexShader: `attribute float aT; varying float vT;
+      void main() { vT = aT; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+            fragmentShader: `uniform vec3 uColor, uFog; uniform float uShow; varying float vT;
+      void main() {
+        gl_FragColor = vec4(mix(uFog, uColor, smoothstep(0.08, 0.7, vT)), uShow);  // mist in the valleys
+        #include <colorspace_fragment>
+      }`,
+        });
+        decor.add(new THREE.Mesh(geo, mat));
+        return mat;
+    });
+
     // ---- koi swimming slowly upstream, weaving a little, just under the surface. The fish is
     // "IkanKoi3D_032" by nurulaini on Sketchfab (CC-BY-4.0, credited on the page), shrunk for the web; it
     // loads after the rest of the scene. It has no animation, so the vertex shader swims it: a wave runs
@@ -890,6 +935,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         u.uNight.value = dark ? 1 : 0;
         for (const [mat, k] of dimmed) mat.color.setScalar(dark ? k : 1);
         lampMat.color.set(dark ? "#ffc27a" : "#e9dcc0");
+        ridgeMats.forEach((m, k) => m.uniforms.uColor.value.set(RIDGES[k].color[dark ? 1 : 0]));
         cloudMat.color.set(dark ? "#3a4448" : "#ffffff");
         night = dark; // the lanterns' glow (draw)
         renderer.setClearColor(bg);
@@ -1029,6 +1075,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         water.position.z = snap(zc, LEN / waterSeg[1]);
         decor.visible = gone < 1;
         for (const m of decorMats) m.opacity = 1 - gone;
+        show.value = 1 - gone;
         glowMat.opacity = night ? 1 - gone : 0;
         cloudMat.opacity = haze * 0.85;
         cloudMat.visible = haze > 0.001;
