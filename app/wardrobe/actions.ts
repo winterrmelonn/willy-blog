@@ -30,12 +30,12 @@ async function adminSession() {
 // The whole wardrobe and who's signed in, or null when the visitor isn't an admin. The page calls it on load,
 // and the login screen calls it right after signing in. Returns null rather than throwing: in production
 // Next hides a server action's error message from the browser.
-export async function loadWardrobe(): Promise<{ operator: string; items: Item[] } | null> {
+export async function loadWardrobe(): Promise<{ operator: string; email: string; items: Item[] } | null> {
     const session = await adminSession();
     if (!session) return null;
     await dbConnect();
     const docs = await WardrobeItem.find().sort({ createdAt: -1 }).lean<Doc[]>();
-    return { operator: session.user.name || session.user.email, items: docs.map(toItem) };
+    return { operator: session.user.name || session.user.email, email: session.user.email, items: docs.map(toItem) };
 }
 
 // Add an item (no id) or update one (with its id). Returns it as saved.
