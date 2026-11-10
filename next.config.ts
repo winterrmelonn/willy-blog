@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // app/sat/route.ts reads this file at request time
+  outputFileTracingIncludes: { "/sat": ["./app/sat/index.html"] },
 };
 
 export default nextConfig;

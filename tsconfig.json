@@ -6,6 +6,7 @@
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true, // lets node --test run lib/*.test.ts directly
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",

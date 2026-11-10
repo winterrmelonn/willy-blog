@@ -1,0 +1,994 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<base href="/sat/">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Rudimentary Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Noto+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* Layout: score-report style home -> full-screen test shell (header / work area / footer), single light theme like the real testing app */
+:root{
+  --blue:#324dc7; --blue-ink:#22348f; --blue-soft:#e9ecfb;
+  --ink:#1b1c20; --muted:#5d6070; --line:#d6d9e3; --line-strong:#9da2b3;
+  --paper:#ffffff; --page:#f4f5fb;
+  --ok:#17804c; --ok-soft:#e5f4ec; --bad:#c3362b; --bad-soft:#fbeceb; --flag:#c8102e;
+  --sans:"Roboto",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --serif:"Noto Serif",Georgia,"Times New Roman",serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--page);color:var(--ink);font:15px/1.5 var(--sans)}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #8ea0f0;outline-offset:2px}
+.wrap{max-width:1080px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ---------- home ---------- */
+.hero{background:var(--blue);color:#fff;position:relative;overflow:hidden}
+.hero .wrap{padding-block:36px 40px;position:relative;z-index:1}
+.hero .back{display:inline-block;margin:-8px 0 14px;padding:4px 10px;border-radius:99px;color:#fff;font-size:13px;text-decoration:none;background:rgba(255,255,255,.14)}
+.hero .back:hover{background:rgba(255,255,255,.26)}
+.hero .brand{font-size:13px;letter-spacing:.14em;text-transform:uppercase;opacity:.85;font-weight:500}
+.hero h1{font-size:clamp(34px,6vw,56px);font-weight:400;margin:6px 0 4px;letter-spacing:-.01em;text-wrap:balance}
+.hero p{margin:0;opacity:.92;font-size:17px}
+.hero .row{display:flex;gap:12px;flex-wrap:wrap;margin-top:26px}
+.pill{border:0;border-radius:999px;padding:12px 26px;font-weight:700;font-size:16px;display:inline-flex;align-items:center;gap:8px;text-decoration:none}
+.pill.white{background:#fff;color:var(--blue)}
+.pill.ghost{background:transparent;color:#fff;box-shadow:inset 0 0 0 2px rgba(255,255,255,.7)}
+.pill.blue{background:var(--blue);color:#fff}
+.pill.line{background:#fff;color:var(--blue);box-shadow:inset 0 0 0 2px var(--blue)}
+.pill:disabled{opacity:.45;cursor:default}
+.deco{position:absolute;inset:0;pointer-events:none}
+.deco i{position:absolute;height:22px;border:3px solid rgba(255,255,255,.22);border-radius:999px;transform:rotate(-38deg)}
+.home main{padding-block:28px 60px;display:grid;gap:22px}
+.card{min-width:0;background:var(--paper);border-radius:18px;padding:24px;box-shadow:0 1px 3px rgba(30,40,90,.08)}
+.card h2{font-size:24px;margin:0 0 4px;font-weight:700;text-wrap:balance}
+.card .sub{color:var(--muted);margin:0 0 18px}
+.domains{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+.dom{border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.dom .tag{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.dom h3{margin:0;font-size:18px}
+.bandline{display:flex;align-items:center;gap:8px;font-variant-numeric:tabular-nums;font-size:14px;color:var(--muted)}
+.bandline b{color:var(--ink)}
+.segbar{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.segbar span{height:10px;background:#eceef3;border:1px solid #cfd2db}
+.segbar span.on{background:#2a3a9a;border-color:#2a3a9a}
+.dom .stats{display:flex;justify-content:space-between;font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
+.dom .pill{align-self:flex-start;margin-top:auto;padding:9px 20px;font-size:15px}
+.prio{display:inline-block;font-size:12px;font-weight:700;padding:2px 9px;border-radius:999px;background:var(--bad-soft);color:var(--bad)}
+.prio.mid{background:#fff3dc;color:#8a5a00}
+.prio.low{background:var(--ok-soft);color:var(--ok)}
+.skills{width:100%;border-collapse:collapse;font-size:14px}
+.skills th{text-align:left;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:500;padding:8px 6px;border-bottom:1px solid var(--line)}
+.skills td{padding:10px 6px;border-bottom:1px solid #eceef3;vertical-align:middle;font-variant-numeric:tabular-nums}
+.skills tr.grp td{font-weight:700;padding-top:18px;border-bottom:0;color:var(--blue-ink)}
+.skills .bar{width:120px;height:8px;background:#eceef3;border-radius:4px;overflow:hidden}
+.skills .bar i{display:block;height:100%;background:var(--blue)}
+.skills button{border:0;background:none;color:var(--blue);font-weight:700;padding:4px 8px;border-radius:6px}
+.skills button:hover{background:var(--blue-soft)}
+.tablewrap{overflow-x:auto}
+.builder{display:grid;gap:18px}
+.field{display:grid;gap:8px}
+.field>label,.field>.lbl{font-weight:700;font-size:14px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1.5px solid var(--line-strong);background:#fff;border-radius:999px;padding:6px 14px;font-size:14px}
+.chip[aria-pressed="true"]{background:var(--blue);border-color:var(--blue);color:#fff}
+.builder .actions{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.foot{color:var(--muted);font-size:13px;display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+.foot button{border:0;background:none;color:var(--blue);text-decoration:underline;padding:0}
+.confirm{display:inline-flex;gap:8px;align-items:center}
+
+/* ---------- test shell ---------- */
+.shell{height:100%;display:flex;flex-direction:column;background:#fff}
+.dash{height:3px;flex:none;background:repeating-linear-gradient(90deg,#1b1c20 0 14px,transparent 14px 20px,#324dc7 20px 34px,transparent 34px 40px,#e0a100 40px 54px,transparent 54px 60px)}
+.top{flex:none;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;padding-block:10px;background:#fff;
+  padding-left:max(24px,env(safe-area-inset-left,0px));padding-right:max(24px,env(safe-area-inset-right,0px))}
+.top .sect{font-weight:700;font-size:17px;line-height:1.25}
+.linkbtn{border:0;background:none;padding:2px 0;font-size:14px;display:inline-flex;align-items:center;gap:4px;color:var(--ink)}
+.timer{text-align:center;font-weight:700;font-size:20px;font-variant-numeric:tabular-nums;line-height:1.1}
+.timer.low{color:var(--flag)}
+.timer .hide{display:block;margin:4px auto 0;border:1px solid var(--line-strong);background:#fff;border-radius:999px;font-size:12px;font-weight:500;padding:1px 12px}
+.tools{display:flex;justify-content:flex-end;gap:6px}
+.tool{border:0;background:none;display:flex;flex-direction:column;align-items:center;font-size:12px;gap:2px;padding:4px 8px;border-radius:8px;color:var(--ink);text-decoration:none}
+.tool:hover{background:#f1f2f6}
+.tool svg{width:22px;height:22px}
+.tool[aria-pressed="true"]{background:var(--blue-soft);color:var(--blue-ink)}
+#calc{position:fixed;left:16px;top:84px;width:440px;height:min(600px,calc(100vh - 170px));z-index:40;background:var(--paper);border-radius:10px;box-shadow:0 8px 32px rgba(20,25,60,.28);display:flex;flex-direction:column;overflow:hidden}
+#calc[hidden]{display:none}
+#calc.big{width:min(960px,calc(100vw - 32px));height:calc(100vh - 170px)}
+#calcbar{background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:6px 8px 6px 14px;cursor:move;touch-action:none;user-select:none;font-weight:700;font-size:15px}
+#calcbar button{background:none;border:0;color:#fff;width:32px;height:28px;border-radius:6px;font-size:16px;cursor:pointer}
+#calcbar button:hover{background:rgba(255,255,255,.15)}
+#calcbody{flex:1;min-height:0}
+#calcbody iframe{width:100%;height:100%;border:0;display:block}
+@media (max-width:700px){#calc,#calc.big{left:8px!important;right:8px;width:auto;top:auto!important;bottom:76px;height:58vh}}
+.work{flex:1;min-height:0;display:flex}
+.split{flex:1;display:grid;grid-template-columns:1fr 6px 1fr;min-height:0}
+.pane{overflow:auto;padding:32px 40px 40px;min-width:0}
+.split.spr{grid-template-columns:minmax(240px,.7fr) 6px 1.5fr}
+.divider{background:#e4e6ec;position:relative}
+.divider::after{content:"";position:absolute;top:50%;left:50%;width:14px;height:34px;margin:-17px 0 0 -7px;background:#fff;border:1px solid var(--line-strong);border-radius:6px}
+.passage{font:18px/1.75 var(--serif);max-width:640px;margin:0 auto}
+.blank{display:inline-block;min-width:4.2em;border-bottom:1.5px solid var(--ink);vertical-align:baseline}
+.single{flex:1;overflow:auto;padding:28px 24px 48px}
+.single .inner{max-width:820px;margin:0 auto}
+.right-inner{max-width:640px;margin:0 auto}
+.qbar{display:flex;align-items:center;gap:12px;background:#f0f1f5;border-bottom:2px dashed #9da2b3;padding:0 10px 0 0;margin-bottom:18px;height:38px}
+.qnum{background:#1b1c20;color:#fff;font-weight:700;height:100%;min-width:38px;display:grid;place-items:center;font-variant-numeric:tabular-nums}
+.mark{border:0;background:none;display:flex;align-items:center;gap:6px;font-size:14px;padding:4px}
+.mark svg{width:16px;height:18px}
+.mark[aria-pressed="true"] svg path{fill:var(--flag);stroke:var(--flag)}
+.abc{margin-left:auto;border:1.5px solid #1b1c20;background:#fff;border-radius:4px;font-size:12px;font-weight:700;padding:1px 6px;text-decoration:line-through}
+.abc[aria-pressed="true"]{background:var(--blue);color:#fff;border-color:var(--blue)}
+.prompt{font:17px/1.6 var(--serif);margin:0 0 18px}
+.choices{display:grid;gap:12px}
+.crow{display:flex;align-items:center;gap:10px}
+.choice{flex:1;display:flex;align-items:center;gap:14px;text-align:left;background:#fff;border:1.5px solid #1b1c20;border-radius:9px;padding:10px 14px;min-height:52px;position:relative;font:16px/1.45 var(--serif)}
+.choice:hover{box-shadow:0 0 0 1px #1b1c20}
+.choice .lt{flex:none;width:28px;height:28px;border-radius:50%;border:1.5px solid #1b1c20;display:grid;place-items:center;font:700 14px var(--sans)}
+.choice.sel{border-color:var(--blue);box-shadow:0 0 0 2px var(--blue)}
+.choice.sel .lt{background:var(--blue);border-color:var(--blue);color:#fff}
+.choice.x{color:#9a9daa}
+.choice.x::after{content:"";position:absolute;left:-6px;right:-6px;top:50%;border-top:2px solid #1b1c20}
+.choice.x img{opacity:.4}
+.choice.ok{border-color:var(--ok);box-shadow:0 0 0 2px var(--ok);background:var(--ok-soft)}
+.choice.ok .lt{background:var(--ok);border-color:var(--ok);color:#fff}
+.choice.bad{border-color:var(--bad);box-shadow:0 0 0 2px var(--bad);background:var(--bad-soft)}
+.choice.bad .lt{background:var(--bad);border-color:var(--bad);color:#fff}
+.choice:disabled{cursor:default}
+.choice img,.stem img,.rat img{display:block;max-width:100%;height:auto}
+.strike{flex:none;width:30px;height:30px;border-radius:50%;border:1.5px solid #1b1c20;background:#fff;font:700 12px var(--sans);text-decoration:line-through}
+.strike.undo{border:0;text-decoration:underline;font-weight:500;width:auto;font-size:13px}
+.stem{display:grid;gap:6px;margin-bottom:20px}
+.loading{color:var(--muted);padding:40px 0;text-align:center}
+.spr-dir{font-size:15px;line-height:1.6;max-width:560px;margin:0 auto}
+.spr-dir h3{margin:0 0 10px;font-size:17px}
+.spr-dir ul{padding-left:20px;margin:8px 0}
+.spr-dir table{border-collapse:collapse;margin-top:12px;font-size:14px}
+.spr-dir td,.spr-dir th{border:1px solid var(--line-strong);padding:4px 12px;text-align:center}
+.spr-in{width:9em;font:600 20px var(--sans);padding:8px 10px;border:1.5px solid #1b1c20;border-radius:6px;border-bottom-width:4px}
+.spr-in:disabled{background:#f6f6f8}
+.preview{margin-top:10px;font-size:15px}
+.explain{margin-top:24px;border-top:2px solid var(--line);padding-top:18px;display:grid;gap:10px}
+.verdict{font-weight:700;font-size:17px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.verdict.ok{color:var(--ok)} .verdict.bad{color:var(--bad)} .verdict.na{color:var(--muted)}
+.meta{display:flex;gap:6px;flex-wrap:wrap}
+.meta span{font-size:12px;background:#f0f1f5;border-radius:999px;padding:2px 10px;color:var(--muted)}
+.rat{font-size:15px;line-height:1.6;display:grid;gap:8px}
+.rat p{margin:0}
+.rule{border-radius:12px;padding:12px 14px;background:var(--blue-soft);border-left:4px solid var(--blue);display:grid;gap:4px}
+.rule .rtag{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--blue-ink)}
+.rule b{font-size:16px}
+.rule p{margin:0;font-size:15px;line-height:1.5}
+.rule .rex{font-family:var(--serif);color:var(--muted)}
+.rule.miss{background:var(--bad-soft);border-left-color:var(--bad)}
+.rule.miss .rtag{color:var(--bad)}
+.rule.miss b{font-size:18px}
+.trap{color:var(--muted);margin:0;font-size:15px;line-height:1.55}
+.apply{border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;gap:8px}
+.apply .rtag{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink)}
+.apply ol{margin:0;padding-left:22px;display:grid;gap:6px;font-size:15px;line-height:1.55}
+.apply .qt{font-family:var(--serif);background:#f3f4f8;border-radius:4px;padding:0 3px}
+.dzbox{border-color:#2f7d4f;background:#f4faf6}
+.dzbox .rtag{color:#1f6a3f}
+.dzhint{font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);margin-left:6px}
+.dzbox code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;background:#fff;border:1px solid #cfe3d6;border-radius:5px;padding:1px 6px;white-space:nowrap}
+.filled{background:var(--page);border-radius:10px;padding:10px 12px}
+.filled .lbl{font-size:12px;color:var(--muted);font-weight:700;margin-bottom:4px}
+.filled p{margin:0;font-family:var(--serif);font-size:16px;line-height:1.6}
+.filled mark{background:var(--ok-soft);color:var(--ok);font-weight:700;border-radius:4px;padding:0 3px}
+.filled u{text-decoration:underline dotted var(--blue) 2px;text-underline-offset:4px}
+details.cb summary{cursor:pointer;color:var(--blue);font-weight:500;font-size:14px}
+details.cb .rat{margin-top:8px;color:var(--muted)}
+.skills td small{display:block;color:var(--muted);font-size:13px;margin-top:2px;max-width:52ch;line-height:1.4}
+.selfgrade{display:flex;gap:8px;flex-wrap:wrap}
+.bottom{flex:none;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;padding-block:12px;background:#fff;
+  padding-left:max(24px,env(safe-area-inset-left,0px));padding-right:max(24px,env(safe-area-inset-right,0px))}
+.bottom .who{font-weight:500;font-size:15px}
+.navpill{background:#1b1c20;color:#fff;border:0;border-radius:8px;padding:8px 16px;font-weight:700;font-size:15px;display:flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums}
+.bottom .btns{display:flex;justify-content:flex-end;gap:10px}
+.bottom .pill{padding:10px 26px}
+.pop{position:fixed;inset:0;background:rgba(20,22,40,.35);display:grid;place-items:end center;padding:16px;z-index:20}
+.pop.center{place-items:center}
+.panel{background:#fff;border-radius:14px;box-shadow:0 10px 40px rgba(0,0,0,.25);padding:22px;max-width:640px;width:100%;max-height:80vh;overflow:auto;margin-bottom:64px}
+.pop.center .panel{margin-bottom:0}
+.panel h3{margin:0 0 12px;font-size:18px;text-align:center}
+.panel .x{float:right;border:0;background:none;font-size:22px;line-height:1;margin:-6px -6px 0 0;padding:4px 8px}
+.legend{display:flex;gap:16px;justify-content:center;font-size:13px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:14px}
+.legend span{display:flex;align-items:center;gap:6px}
+.grid{display:flex;flex-wrap:wrap;gap:12px;justify-content:center}
+.gq{width:40px;height:40px;border:1.5px dashed #6c7080;background:#fff;font-weight:700;color:var(--blue);position:relative;font-variant-numeric:tabular-nums}
+.gq.ans{background:var(--blue);color:#fff;border:1.5px solid var(--blue)}
+.gq.cur::before{content:"";position:absolute;top:-14px;left:50%;margin-left:-6px;border:6px solid transparent;border-top:8px solid #1b1c20}
+.gq.mk::after{content:"";position:absolute;top:-6px;right:-6px;width:12px;height:14px;background:var(--flag);clip-path:polygon(0 0,100% 0,100% 100%,50% 75%,0 100%)}
+.gq.right{background:var(--ok);border:1.5px solid var(--ok);color:#fff}
+.gq.wrong{background:var(--bad);border:1.5px solid var(--bad);color:#fff}
+.sw{width:16px;height:16px;display:inline-block;border:1.5px dashed #6c7080}
+.sw.a{background:var(--blue);border:1.5px solid var(--blue)}
+.panel .center{text-align:center;margin-top:18px}
+.ref{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px 18px;font-size:14px}
+.ref div{border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.ref b{display:block;font-size:12px;color:var(--muted);font-weight:500}
+.ref code{font:600 15px var(--serif)}
+.menu{position:absolute;right:16px;top:64px;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.15);padding:6px;z-index:30;display:grid;min-width:200px}
+.menu button{border:0;background:none;text-align:left;padding:9px 12px;border-radius:6px}
+.menu button:hover{background:#f1f2f6}
+.checkpage{flex:1;overflow:auto;padding:36px 16px}
+.checkpage .inner{max-width:720px;margin:0 auto;text-align:center}
+.checkpage h2{font-size:30px;font-weight:400;margin:0 0 8px}
+.checkpage .panel{margin:24px auto 0;box-shadow:0 1px 8px rgba(0,0,0,.1);max-height:none}
+
+/* ---------- results ---------- */
+.res main{padding-block:28px 60px;display:grid;gap:22px}
+.bigscore{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.bigscore b{font-size:64px;line-height:1;font-weight:700;font-variant-numeric:tabular-nums}
+.rlist{display:grid}
+.ritem{display:grid;grid-template-columns:44px 30px 1fr auto;gap:12px;align-items:center;padding:10px 4px;border-bottom:1px solid #eceef3;text-align:left;border-left:0;border-right:0;border-top:0;background:none;width:100%}
+.ritem:hover{background:#f7f8fc}
+.ritem .n{font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
+.mk-ok{color:var(--ok);font-weight:700;font-size:18px}.mk-bad{color:var(--bad);font-weight:700;font-size:18px}.mk-na{color:var(--muted);font-weight:700}
+.ritem .s{min-width:0}
+.ritem .s small{display:block;color:var(--muted)}
+.ritem .d{font-size:13px;color:var(--muted)}
+.dbreak{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.dbreak div{border:1px solid var(--line);border-radius:12px;padding:14px}
+.dbreak b{font-size:26px;font-variant-numeric:tabular-nums}
+
+@media (max-width:820px){
+  .split,.split.spr{grid-template-columns:1fr;grid-template-rows:auto auto;overflow:auto}
+  .split .pane{overflow:visible;padding:20px 16px}
+  .divider{height:6px}
+  .divider::after{display:none}
+  .work{overflow:auto}
+  .top{grid-template-columns:1fr auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .top .tools{grid-column:1/-1;justify-content:flex-start;order:3}
+  .bottom{grid-template-columns:auto 1fr;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .bottom .who{display:none}
+  .bottom .pill{padding:10px 18px}
+  .single{padding:20px 16px 40px}
+  .passage{font-size:17px}
+  .skills .bar{width:70px}
+}
+</style>
+
+<div id="app"><p style="padding:40px;text-align:center;color:#5d6070">Loading question bank…</p></div>
+<div id="calc" role="dialog" aria-label="Graphing calculator" hidden>
+  <div id="calcbar"><span>Calculator</span><span><button id="calcpop" aria-label="Open in its own window" title="Open in its own window (use this if the calculator is blank)">↗</button><button id="calcbig" aria-label="Expand" title="Expand">⤢</button><button id="calcx" aria-label="Close" title="Close">✕</button></span></div>
+  <div id="calcbody"></div>
+</div>
+
+<script src="data/bank.js"></script>
+<script src="data/explain.js"></script>
+<script src="data/desmos.js"></script>
+<script>
+"use strict";
+/* ============ data ============ */
+const B = window.BANK;
+const Q = [], byId = {};
+B.rw.forEach(q => { q.sec = "rw"; Q.push(q); });
+B.math.forEach(q => { q.sec = "m"; Q.push(q); });
+Q.forEach(q => byId[q.id] = q);
+
+// From the June 2026 -> August 2026 score reports. Weight = share of a smart set before accuracy adjusts it.
+const DOMAINS = [
+  { name: "Problem-Solving and Data Analysis", short: "Data Analysis", sec: "m", w: 0.40, bands: ["470–540", "550–600"], segs: [3, 4] },
+  { name: "Standard English Conventions", short: "English Conventions", sec: "rw", w: 0.25, bands: ["550–600", "610–670"], segs: [4, 5] },
+  { name: "Geometry and Trigonometry", short: "Geometry & Trig", sec: "m", w: 0.35, bands: ["610–670", "680–800"], segs: [5, 6] },
+];
+const DOM = Object.fromEntries(DOMAINS.map(d => [d.name, d]));
+
+// English Conventions rules. Every R&W question is tagged with one in data/explain.js: EXPLAIN[id] = [rule, plain explanation, trap].
+const EX = window.EXPLAIN || {};
+const RULES = {
+  B1: ["Two sentences → . or ; or , + FANBOYS", "Cover the blank. If both sides could stand alone as sentences, join them with a period, a semicolon, or a comma + and/but/so/for/or/nor/yet. A comma alone is a comma splice, and nothing at all is a run-on.", "The game came from cricket, but it differs in key ways."],
+  B2: ["Fragment + sentence → comma", "If one side can't stand alone (an although/while/because clause, an -ing phrase, a \"which\" clause, a descriptive add-on), attach it with a comma. A period or semicolon would strand a fragment.", "Although most meteorites come from asteroids, several hundred are from Mars."],
+  B3: ["Colon or single dash needs a full sentence before it", "The part before a colon must be a complete sentence. After it comes a list, an explanation, or a name. Never use a colon right after \"such as,\" \"including,\" \"of,\" or a verb.", "The goals were threefold: to ensure…, to secure…, and to advocate…"],
+  B4: ["Extra info → matching pair", "If you could delete a phrase and the sentence still works, wrap it in two matching marks: , … , or — … — or ( … ). See how the aside opens and close it the same way.", "Photosynthesis, the process plants use to make food, is fueled by…"],
+  B5: ["Essential info → no punctuation", "No commas when the words are needed to know who or what: a title stuck to a name (\"biologist Yuree Lee\"), a \"that\" clause, or an identifying name (\"the compound aluminum oxide\").", "Chemistry professor Yugang Sun and his colleagues developed…"],
+  B6: ["Don't split the core", "Never punctuate between a subject and its verb, a verb and its object, or a preposition (of, by, to, from, during) and its object, however long the subject is.", "The strings inside the instrument are plucked."],
+  B7: ["Lists: commas, or semicolons if items have commas", "Simple list → commas. If any item already has a comma inside, separate the items with semicolons. A \"; and\" later in the sentence is your clue.", "Sharpless, who coined the term; Bertozzi, of Stanford; and Meldal."],
+  B8: ["Transition words can't join sentences", "However, though, rather, for example, and even so are not FANBOYS. Between two full sentences, use \"; however,\" or \". However,\", with the semicolon where the sentence really ends.", "It isn't exclusive to certain languages, however; any language can use it."],
+  B9: ["? only for real questions", "A sentence that describes a question (\"they studied how people perceive kindness\") is a statement, so it keeps normal word order and ends with a period. Only a direct question gets flipped order and a \"?\".", "Where did the word come from?  vs.  We asked where the word came from."],
+  F1: ["Subject–verb agreement", "Find the real subject. Cross out \"of…\" phrases, asides in commas or dashes, and that/which clauses, then match the verb. Each, every, and -ing subjects are singular. X and Y is plural.", "The presence of many microbacteria reinforces…"],
+  F2: ["Pronoun agreement", "A pronoun matches the noun it replaces. A company, team, brain, or water takes it/its. Two or more things take they/their/them. Find the noun first.", "The animal nurses its young."],
+  F3: ["Tense: match the timeline", "Match the other verbs and time words. \"Today\" or general facts → present. Dates or a story in the past → past. \"Since…\" → has/have. \"By [past time]\" or \"before another past event\" → had.", "By 2023, she had become…"],
+  F4: ["Every sentence needs one real verb", "If the sentence has no main verb yet, pick a real one (is, explains, used), not -ing, \"to ___,\" or \"having ___.\" If it already has one, the blank is a describing phrase (-ing/-ed) or a purpose (\"to ___\").", "Scientists searching for evidence adapted the test."],
+  F5: ["Modifier next to what it describes", "An opening phrase describes whatever comes right after the comma. Ask who or what is doing it, and put that noun first.", "Defying all odds, Rudolph won…"],
+  F6: ["Possessive or plural?", "Ask whether it owns something. If not, it's a plain plural with no apostrophe. One owner → 's. Several owners → s'. Its = belongs to it, it's = it is, their = belongs to them.", "The photographer's early photos"],
+};
+const ruleOf = q => EX[q.id] && EX[q.id][0];
+const SECS = { rw: 71, m: 95 };               // real-test seconds per question
+// Test-eve mode: Hard dominates, Easy almost never shows up.
+const DIFFW = { Easy: 0.04, Medium: 0.45, Hard: 1.6 };
+// Data Analysis questions a Desmos regression/graph cracks fastest. DESMOS[id] = [isRegression, steps]
+const DZ = window.DESMOS || {};
+const isReg = q => !!(DZ[q.id] && DZ[q.id][0]);
+const REGW = 3;
+// Desmos playbook per question type. `backticks` = exactly what you type into Desmos.
+const TABLE = "In Desmos click + → table. Type the points into the x₁ and y₁ columns (read them off gridline crossings; check the axis scale first, because gridlines often aren't 1 unit).";
+const DZT = {
+  lobfeq: ["Desmos regression", [TABLE + " For a line of best fit, 2 points the line clearly passes through are enough. For raw data, enter 4–6 points.", "Below the table type `y_1~mx_1+b`. Desmos prints m (slope) and b (y-intercept).", "Pick the choice with that sign and size of slope and intercept. Even faster: type all four choices as equations and keep the one that runs through your points."]],
+  predict: ["Desmos regression", [TABLE + " Use 2 points the line passes through.", "Type `y_1~mx_1+b`. Now m and b exist as numbers you can use.", "Type `m*(x-value from the question)+b`, e.g. `m*8500+b`. Desmos shows the prediction.", "Pick the closest choice. It's an estimate, so 'closest' is what they want."]],
+  slope: ["Desmos regression", [TABLE + " Enter 2 points far apart on the line, not two data dots.", "Type `y_1~mx_1+b` and read m. That's the slope.", "Check: line goes down left to right → slope negative. Then pick the closest value."]],
+  resid: ["Desmos regression", [TABLE + " Use 2 points on the line.", "Type `y_1~mx_1+b`, then `m*(the point's x)+b` = predicted y.", "Actual minus predicted: `(actual y)-(m*x+b)`. Positive means the point is above the line."]],
+  exp: ["Desmos regression", [TABLE + " Enter 4–6 points from the scatterplot or table.", "Type `y_1~ab^x_1`. Desmos prints a (starting value at x = 0) and b (growth factor).", "b > 1 → growth by (b − 1)×100% per step. 0 < b < 1 → decay by (1 − b)×100%. If the model is written a(1 + r)^x, then r = b − 1.", "Match a and b (or r) to the choices."]],
+  quad: ["Desmos regression", [TABLE + " Enter 5–6 points spread across the curve.", "Type `y_1~ax_1^2+bx_1+c`.", "a < 0 → opens down, a > 0 → opens up, c = y-intercept. Pick the choice with matching signs and a close c."]],
+  transform: ["Desmos regression", [TABLE + " Use 2 points on the original line.", "Type `y_1~mx_1+b` to get the original slope and intercept.", "Multiplying every y by k multiplies both: graph `y=k(mx+b)` with the k from the question and compare to the choices."]],
+  modelpick: ["Desmos regression", [TABLE + " Enter 5–6 points.", "Try `y_1~mx_1+b` and then `y_1~ab^x_1`. The one with r² closer to 1 is the better shape.", "The right model follows the trend with points on both sides of it, not all above or all below."]],
+  modeltype: ["Fastest method", ["Same amount added or subtracted each step → linear. Same percent or factor each step → exponential.", "Rising → increasing, falling → decreasing. A curve that gets steeper → exponential, not linear.", "Got a table? Put it in a Desmos table and compare r² for `y_1~mx_1+b` and `y_1~ab^x_1`. Closer to 1 wins."]],
+  interp: ["Fastest method", ["Slope = change in y for each 1 unit of x, in the question's units (y-units per x-unit). The y-intercept = y when x = 0.", "If they ask about 5 units of x, multiply the slope by 5. Type it in Desmos (`57*5`) to avoid slips.", "Reject choices that swap x and y, or that talk about totals when the slope is a per-unit rate."]],
+  aroc: ["Fastest method", ["Read the two points: (x at the start, y at the start) and (x at the end, y at the end).", "Type `(y_end-y_start)/(x_end-x_start)` with the numbers, e.g. `(24-14)/(6-2)`.", "Units: y-units per x-unit. Convert dates to x-values first (e.g. January 10 = 9 days after January 1)."]],
+  count: ["Fastest method", ["No Desmos needed. Actual y greater than predicted → the dot is above the line. Predicted greater than actual → the dot is below.", "Count carefully. Dots sitting exactly on the line don't count either way."]],
+  read: ["Fastest method", ["Read straight off the graph: find the x-value, go up to the dot or line, then across to the y-axis.", "Check the axis labels and scale (units, thousands, percent) before picking.", "If it's a table of values, paste it into a Desmos table to see the shape instantly."]],
+  pct: ["Desmos method", ["Turn every percent change into a multiplier: +p% → (1 + p/100), −p% → (1 − p/100). For example, up 25% then down 10% → `1.25*0.9`.", "Chain everything in one Desmos line, e.g. `80*1.25*0.9`.", "Unknown original value? Type the equation with x, e.g. `x*1.25*0.9=90`. Desmos draws a vertical line at the answer; tap it to read x.", "'p% of A is B' → `p/100*A=B`. 'B is what percent of A' → `100*B/A`. A percent of a percent multiplies: 30% of 40% → `0.3*0.4`."]],
+  rate: ["Desmos method", ["Write the units as a chain so they cancel, e.g. miles/hour × hours = miles. Flip a conversion if its units don't cancel.", "Type the whole chain as one Desmos line, e.g. `450*5280/3600`.", "Proportion with an unknown? Type it with x, e.g. `x/12=5/8`, and tap the vertical line to read x.", "Sanity check: bigger unit → smaller number (feet → miles shrinks)."]],
+  stats: ["Desmos method", ["Type the data as a list. Repeat values as often as they appear (count dots on a dot plot): `L=[12,15,15,18,30]`.", "`mean(L)`, `median(L)`, `max(L)-min(L)` (range), `stdev(L)`. Desmos does each instantly.", "Missing value for a target mean? `mean([12,15,18,x])=16` → tap the vertical line for x.", "Concept check: an outlier drags the mean a lot and the median barely. Removing the max lowers the range."]],
+  freq: ["Desmos method", ["Values list and counts list: `V=[1,2,3,4]`, `F=[5,8,4,3]`.", "Mean = `total(V*F)/total(F)`. Total count = `total(F)`.", "Median: position (n + 1)/2 with n = `total(F)`. Count down the table until you reach that position.", "Comparing two tables? Build both and compare `total(V*F)/total(F)` side by side."]],
+  sd: ["Fastest method", ["Standard deviation = how spread out values are from the mean. More values far from the center → bigger SD.", "Same shape shifted up or down → same SD. Values clustered tightly in the middle → smaller SD.", "Not sure? Type both data sets as lists and compare `stdev(A)` and `stdev(B)` in Desmos."]],
+  prob: ["Desmos method", ["Find the 'out of' group: 'given …', 'of the …', 'selected from the …'. That row or column total is the denominator.", "The numerator is the cell that fits both conditions.", "Type `cell/total` in Desmos (e.g. `146/384`) and match the decimal to the choices. Probability of 'A or B' = add the cells, but don't double-count the overlap."]],
+  infer: ["Fastest method", ["Margin of error: the true value is likely in estimate ± margin. Anything outside that range is unlikely, and nothing inside is 'exact'.", "Larger random sample → smaller margin of error. Results only generalize to the population that was actually sampled.", "Estimating a total? Type `(sample proportion)*(population size)` in Desmos, e.g. `(26/80)*4500`."]],
+  claims: ["Fastest method", ["Randomly selected from a population → you can generalize to that population.", "Randomly assigned to treatments → you can claim cause and effect.", "Neither → only an association, and only for the people in the study. Pick the choice that claims no more than the design allows."]],
+};
+const shortSkill = s => s.split(":")[0].replace("Ratios, rates, proportional relationships, and units", "Ratios, rates & units");
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const $ = (s, el = document) => el.querySelector(s);
+
+/* ============ progress (localStorage + willy.work account, via /sat/progress) ============ */
+const LK = "nextband.v1";
+let P = { att: {} };                         // att[qid] = {c:0|1, n:attempts, t:ms}
+try { P = JSON.parse(localStorage.getItem(LK)) || P; } catch (e) {}
+let remote = null, syncLabel = "Saved in this browser", writing = Promise.resolve(), pushTimer;
+function saveP() {
+  try { localStorage.setItem(LK, JSON.stringify(P)); } catch (e) {}
+  if (remote) { clearTimeout(pushTimer); pushTimer = setTimeout(() => { writing = writing.then(() => remote.set({ att: P.att })).catch(() => {}); }, 1200); }
+}
+function record(q, ok) {
+  if (ok === null) return;
+  const a = P.att[q.id] || { n: 0 };
+  P.att[q.id] = { c: ok ? 1 : 0, n: a.n + 1, t: Date.now() };
+  saveP();
+}
+(async () => {
+  try {
+    const ref = {
+      get: () => fetch("/sat/progress", { cache: "no-store" }).then(r => { if (!r.ok) throw r.status; return r.json(); }),
+      set: d => fetch("/sat/progress", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(d) }),
+    };
+    const theirs = (await ref.get()).att || {};
+    let changed = false;
+    for (const [k, v] of Object.entries(theirs)) if (!P.att[k] || P.att[k].t < v.t) { P.att[k] = v; changed = true; }
+    remote = ref; syncLabel = "Saved to your account";
+    try { localStorage.setItem(LK, JSON.stringify(P)); } catch (e) {}
+    if (Object.keys(P.att).length > Object.keys(theirs).length || changed) saveP();
+    if (view === "home") renderHome();
+  } catch (e) {}
+})();
+
+let PREF = { fb: "instant" };
+try { PREF = Object.assign(PREF, JSON.parse(localStorage.getItem(LK + ".pref")) || {}); } catch (e) {}
+const savePref = () => { try { localStorage.setItem(LK + ".pref", JSON.stringify(PREF)); } catch (e) {} };
+
+/* ============ stats + tailoring ============ */
+function skillStats() {
+  const s = {};
+  for (const q of Q) {
+    const k = q.skill, o = s[k] || (s[k] = { skill: k, domain: q.domain, total: 0, seen: 0, right: 0 });
+    o.total++;
+    const a = P.att[q.id]; if (a) { o.seen++; o.right += a.c; }
+  }
+  for (const o of Object.values(s)) o.acc = o.seen ? o.right / o.seen : null;
+  return s;
+}
+function ruleStats() {
+  const s = Object.fromEntries(Object.keys(RULES).map(k => [k, { rule: k, total: 0, seen: 0, right: 0 }]));
+  for (const q of Q) {
+    const k = ruleOf(q); if (!k) continue;
+    const o = s[k]; o.total++;
+    const a = P.att[q.id]; if (a) { o.seen++; o.right += a.c; }
+  }
+  for (const o of Object.values(s)) o.acc = o.seen ? o.right / o.seen : null;
+  return s;
+}
+function domainStats() {
+  const d = {};
+  for (const D of DOMAINS) d[D.name] = { seen: 0, right: 0, total: 0 };
+  for (const q of Q) { const o = d[q.domain]; o.total++; const a = P.att[q.id]; if (a) { o.seen++; o.right += a.c; } }
+  return d;
+}
+// weighted sample without replacement (Efraimidis–Spirakis keys)
+function pick(pool, n) {
+  const ss = skillStats(), dcount = {};
+  pool.forEach(q => dcount[q.domain] = (dcount[q.domain] || 0) + 1);
+  const now = Date.now(), DAY = 864e5;
+  const keyed = pool.map(q => {
+    const st = ss[q.skill];
+    const acc = (st.right + 1.1) / (st.seen + 2);           // prior ~55%
+    const a = P.att[q.id];
+    let status = 1;                                          // unseen
+    if (a) status = a.c ? 0.08 : (now - a.t > DAY / 2 ? 1.7 : 0.15);
+    const w = DOM[q.domain].w / dcount[q.domain] * (1.2 - acc) * DIFFW[q.difficulty] * status * (isReg(q) ? REGW : 1);
+    return [Math.pow(Math.random(), 1 / Math.max(w, 1e-9)), q];
+  });
+  keyed.sort((a, b) => b[0] - a[0]);
+  const chosen = keyed.slice(0, n).map(x => x[1]);
+  return chosen.sort((a, b) => (a.sec === b.sec ? 0 : a.sec === "rw" ? -1 : 1));   // R&W first, like the real test
+}
+
+/* ============ grading ============ */
+function num(s) {
+  s = String(s).replace(/,/g, "").trim();
+  if (/^-?\d*\.?\d+\/\d*\.?\d+$/.test(s)) { const [a, b] = s.split("/").map(Number); return b ? a / b : NaN; }
+  return /^-?\d*\.?\d+$/.test(s) ? Number(s) : NaN;
+}
+function grade(q, v) {
+  if (v == null || v === "") return false;
+  if (q.type !== "spr") return v === q.answer;
+  if (!q.answer) return null;                                 // answer only shown as a figure: self-grade
+  const x = num(v);
+  return q.answer.split(/,\s+/).some(a => a.trim() === v.trim() || (!isNaN(x) && Math.abs(num(a) - x) < 1e-6));
+}
+
+/* ============ math images (lazy chunks) ============ */
+const IMGS = {}, chunkP = {};
+window.IMG = d => Object.assign(IMGS, d);
+function loadChunk(c) {
+  return chunkP[c] || (chunkP[c] = new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = `data/img${c}.js`; s.onload = res;
+    s.onerror = () => { delete chunkP[c]; rej(); };
+    document.head.appendChild(s);
+  }));
+}
+const K = 0.5;  // image px -> css px (crops are 3x zoom of the source page)
+const imgs = (arr, alt) => (arr || []).map(([src, w]) => `<img src="${src}" width="${Math.round(w * K)}" alt="${alt}">`).join("");
+
+/* ============ session ============ */
+let view = "home", S = null, tick = null;
+function startSet(qs, title, opts = {}) {
+  if (!qs.length) return;
+  S = {
+    title, qs: qs.map(q => q.id), i: 0, ans: {}, elim: {}, mark: {}, checked: {}, self: {},
+    fb: opts.fb || PREF.fb, timed: opts.timed !== false, abc: false, hideTimer: false,
+    limit: qs.reduce((t, q) => t + SECS[q.sec], 0), start: Date.now(), phase: "test",
+  };
+  qs.filter(q => q.sec === "m").slice(0, 3).forEach(q => loadChunk(q.chunk).catch(() => {}));
+  clearInterval(tick); tick = setInterval(updTimer, 1000);
+  view = "test"; renderTest();
+}
+const curQ = () => byId[S.qs[S.i]];
+function resultOf(q) {
+  if (q.type === "spr" && !q.answer && S.self[q.id] != null) return S.self[q.id];
+  return grade(q, S.ans[q.id]);
+}
+
+/* ============ home ============ */
+function decoPills() {
+  const spots = [[58, 20, 120], [70, 55, 70], [78, 18, 160], [86, 62, 90], [64, 78, 60], [92, 30, 70], [50, 85, 80], [96, 82, 110]];
+  return `<div class="deco" aria-hidden="true">${spots.map(([x, y, w]) => `<i style="left:${x}%;top:${y}%;width:${w}px"></i>`).join("")}</div>`;
+}
+let builder = { doms: new Set(DOMAINS.map(d => d.name)), diffs: new Set(["Hard"]), n: 15, timed: true };
+// Hard first; tops up with Medium only if the Hard pool runs short.
+const hardPool = (qs, n) => { const h = qs.filter(q => q.difficulty === "Hard"); return h.length >= n * 2 ? h : qs.filter(q => q.difficulty !== "Easy"); };
+let confirmReset = false;
+function renderHome() {
+  view = "home"; clearInterval(tick); $("#calc").hidden = true;
+  const ds = domainStats(), ss = skillStats(), rs = ruleStats();
+  const missed = Q.filter(q => P.att[q.id] && !P.att[q.id].c);
+  const done = Object.keys(P.att).length;
+  const prioOf = acc => acc == null ? ["Not started", "mid"] : acc < 0.6 ? ["Focus", ""] : acc < 0.8 ? ["Building", "mid"] : ["Solid", "low"];
+  const app = $("#app");
+  app.className = "home";
+  app.innerHTML = `
+  <header class="hero">${decoPills()}
+    <div class="wrap">
+      <a class="back" href="/">← willy.work</a>
+      <div class="brand">Rudimentary Intelligence · SAT practice</div>
+      <h1>Your practice plan</h1>
+      <p>Built from your June and August 2026 score reports. Sets lean toward your three lowest-scoring areas.</p>
+      <div class="row">
+        <button class="pill white" id="smart">Start smart set · 15 questions</button>
+        <button class="pill ghost" id="regdrill">Regression drill · Desmos</button>
+        <button class="pill ghost" id="geohard">Hard geometry · 10</button>
+        <button class="pill ghost" id="missed" ${missed.length ? "" : "disabled"}>Retry missed (${missed.length})</button>
+      </div>
+    </div>
+  </header>
+  <main class="wrap">
+    <section class="card">
+      <h2>Where your points are</h2>
+      <p class="sub">The bars show your score band in each area, June → August. Each card practices only that area.</p>
+      <div class="domains">${DOMAINS.map(D => {
+        const s = ds[D.name], acc = s.seen ? Math.round(100 * s.right / s.seen) : null;
+        return `<div class="dom">
+          <div class="tag">${D.sec === "m" ? "Math" : "Reading and Writing"}</div>
+          <h3>${D.name}</h3>
+          <div class="bandline">Band <b>${D.bands[0]}</b> → <b>${D.bands[1]}</b></div>
+          <div class="segbar" aria-label="Latest band ${D.bands[1]}">${[...Array(7)].map((_, i) => `<span class="${i < D.segs[1] ? "on" : ""}"></span>`).join("")}</div>
+          <div class="stats"><span>${s.seen} of ${s.total} done</span><span>${acc == null ? "No attempts yet" : acc + "% correct"}</span></div>
+          <button class="pill blue" data-dom="${esc(D.name)}">Practice 10</button>
+        </div>`;
+      }).join("")}</div>
+    </section>
+
+    <section class="card">
+      <h2>Skills</h2>
+      <p class="sub">Accuracy is your latest attempt at each question. Pick any skill for a focused set of 10.</p>
+      <div class="tablewrap"><table class="skills">
+        <thead><tr><th>Skill</th><th>Done</th><th>Accuracy</th><th></th><th>Status</th><th></th></tr></thead>
+        <tbody>${DOMAINS.map(D => `<tr class="grp"><td colspan="6">${D.short}</td></tr>` +
+          Object.values(ss).filter(o => o.domain === D.name).sort((a, b) => (a.acc ?? -1) - (b.acc ?? -1)).map(o => {
+            const [lbl, cls] = prioOf(o.acc);
+            return `<tr><td>${esc(shortSkill(o.skill))}</td><td>${o.seen}/${o.total}</td>
+              <td>${o.acc == null ? "–" : Math.round(o.acc * 100) + "%"}</td>
+              <td><div class="bar"><i style="width:${o.acc == null ? 0 : o.acc * 100}%"></i></div></td>
+              <td><span class="prio ${cls}">${lbl}</span></td>
+              <td><button data-skill="${esc(o.skill)}">Practice</button></td></tr>`;
+          }).join("")).join("")}</tbody>
+      </table></div>
+    </section>
+
+    <section class="card">
+      <h2>English rules log</h2>
+      <p class="sub">Every English Conventions question tests one of these 15 rules. Your weakest rules are at the top. Practice drills just that rule.</p>
+      <div class="tablewrap"><table class="skills">
+        <thead><tr><th>Rule</th><th>Done</th><th>Accuracy</th><th></th><th>Missed</th><th></th></tr></thead>
+        <tbody>${[["B", "Boundaries (punctuation)"], ["F", "Form, Structure, and Sense (grammar)"]].map(([g, label]) => `<tr class="grp"><td colspan="6">${label}</td></tr>` +
+          Object.values(rs).filter(o => o.rule[0] === g).sort((a, b) => (a.acc ?? 2) - (b.acc ?? 2) || a.rule.localeCompare(b.rule)).map(o => {
+            const [name, rule] = RULES[o.rule], missN = o.seen - o.right;
+            return `<tr><td><b>${o.rule}</b> · ${esc(name)}<small>${esc(rule)}</small></td><td>${o.seen}/${o.total}</td>
+              <td>${o.acc == null ? "–" : Math.round(o.acc * 100) + "%"}</td>
+              <td><div class="bar"><i style="width:${o.acc == null ? 0 : o.acc * 100}%"></i></div></td>
+              <td>${missN ? `<span class="prio">${missN}</span>` : "–"}</td>
+              <td><button data-rule="${o.rule}">Practice</button></td></tr>`;
+          }).join("")).join("")}</tbody>
+      </table></div>
+    </section>
+
+    <section class="card">
+      <h2>Build a set</h2>
+      <p class="sub">Questions you missed come back after half a day. Questions you got right rarely repeat.</p>
+      <div class="builder">
+        <div class="field"><span class="lbl">Areas</span><div class="chips">${DOMAINS.map(D => `<button class="chip" data-bdom="${esc(D.name)}" aria-pressed="${builder.doms.has(D.name)}">${D.short}</button>`).join("")}</div></div>
+        <div class="field"><span class="lbl">Difficulty</span><div class="chips">${["Easy", "Medium", "Hard"].map(d => `<button class="chip" data-bdiff="${d}" aria-pressed="${builder.diffs.has(d)}">${d}</button>`).join("")}</div></div>
+        <div class="field"><span class="lbl">Questions</span><div class="chips">${[5, 10, 15, 22, 27].map(n => `<button class="chip" data-bn="${n}" aria-pressed="${builder.n === n}">${n}</button>`).join("")}</div></div>
+        <div class="field"><span class="lbl">Timer</span><div class="chips">
+          <button class="chip" data-btimed="1" aria-pressed="${builder.timed}">Real-test pace</button>
+          <button class="chip" data-btimed="0" aria-pressed="${!builder.timed}">Untimed</button></div></div>
+        <div class="field"><span class="lbl">Show answers</span><div class="chips">
+          <button class="chip" data-fb="instant" aria-pressed="${PREF.fb === "instant"}">After each question</button>
+          <button class="chip" data-fb="end" aria-pressed="${PREF.fb === "end"}">At the end, like the real test</button></div></div>
+        <div class="actions"><button class="pill blue" id="build">Start set</button><span id="bmsg" class="sub" style="margin:0"></span></div>
+      </div>
+    </section>
+
+    <div class="foot">
+      <span>${done} of ${Q.length} questions attempted · ${syncLabel}</span>
+      ${confirmReset ? `<span class="confirm">Erase all progress? <button id="resetyes">Erase</button><button id="resetno">Keep</button></span>` : `<button id="reset">Reset progress</button>`}
+    </div>
+  </main>`;
+
+  $("#smart").onclick = () => startSet(pick(Q, 15), "Smart Set");
+  $("#missed").onclick = () => startSet(pick(missed, Math.min(missed.length, 20)), "Missed Questions");
+  app.querySelectorAll("[data-dom]").forEach(b => b.onclick = () =>
+    startSet(pick(hardPool(Q.filter(q => q.domain === b.dataset.dom), 10), 10), DOM[b.dataset.dom].short));
+  $("#regdrill").onclick = () => startSet(pick(Q.filter(isReg), 10), "Regression Drill", { fb: "instant" });
+  $("#geohard").onclick = () => startSet(pick(Q.filter(q => q.domain === "Geometry and Trigonometry" && q.difficulty === "Hard"), 10), "Hard Geometry");
+  app.querySelectorAll("[data-skill]").forEach(b => b.onclick = () =>
+    startSet(pick(Q.filter(q => q.skill === b.dataset.skill), 10), shortSkill(b.dataset.skill)));
+  app.querySelectorAll("[data-rule]").forEach(b => b.onclick = () =>
+    startSet(pick(Q.filter(q => ruleOf(q) === b.dataset.rule), 10), `Rule ${b.dataset.rule}`, { fb: "instant" }));
+  const toggle = (set, v) => { set.has(v) ? set.delete(v) : set.add(v); renderHome(); };
+  app.querySelectorAll("[data-bdom]").forEach(b => b.onclick = () => toggle(builder.doms, b.dataset.bdom));
+  app.querySelectorAll("[data-bdiff]").forEach(b => b.onclick = () => toggle(builder.diffs, b.dataset.bdiff));
+  app.querySelectorAll("[data-bn]").forEach(b => b.onclick = () => { builder.n = +b.dataset.bn; renderHome(); });
+  app.querySelectorAll("[data-btimed]").forEach(b => b.onclick = () => { builder.timed = b.dataset.btimed === "1"; renderHome(); });
+  app.querySelectorAll("[data-fb]").forEach(b => b.onclick = () => { PREF.fb = b.dataset.fb; savePref(); renderHome(); });
+  $("#build").onclick = () => {
+    const pool = Q.filter(q => builder.doms.has(q.domain) && builder.diffs.has(q.difficulty));
+    if (!pool.length) { $("#bmsg").textContent = "Pick at least one area and one difficulty."; return; }
+    startSet(pick(pool, builder.n), "Custom Set", { timed: builder.timed });
+  };
+  const r = $("#reset"); if (r) r.onclick = () => { confirmReset = true; renderHome(); };
+  const ry = $("#resetyes"); if (ry) ry.onclick = () => { P = { att: {} }; saveP(); confirmReset = false; renderHome(); };
+  const rn = $("#resetno"); if (rn) rn.onclick = () => { confirmReset = false; renderHome(); };
+}
+
+/* ============ test shell ============ */
+const ICON = {
+  pen: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20l4-1 11-11-3-3L5 16l-1 4z"/><path d="M14 6l3 3"/></svg>`,
+  more: `<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>`,
+  calc: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 12h2M12 12h2M16 12v5M8 16h2M12 16h2"/></svg>`,
+  ref: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4h10l4 4v12H5z"/><path d="M8 11h8M8 15h8M14 4v4h5"/></svg>`,
+  book: `<svg viewBox="0 0 16 18"><path d="M2 1h12v16l-6-4-6 4z" fill="none" stroke="#1b1c20" stroke-width="1.6"/></svg>`,
+  caret: `<svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>`,
+};
+function fmt(sec) { sec = Math.max(0, Math.round(sec)); return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`; }
+function updTimer() {
+  if (!S || view !== "test") return;
+  const el = $("#tm"); if (!el) return;
+  const spent = (Date.now() - S.start) / 1000;
+  if (S.timed && S.phase === "test" && spent >= S.limit) { S.timeUp = true; S.phase = "check"; renderTest(); return; }
+  const t = S.timed ? S.limit - spent : spent;
+  el.textContent = S.hideTimer ? "" : fmt(t);
+  el.parentElement.classList.toggle("low", S.timed && t < 300 && !S.hideTimer);
+}
+
+function renderTest() {
+  const app = $("#app"); app.className = "";
+  const q = curQ(), isM = q.sec === "m";
+  const reviewing = S.phase === "review";
+  const sect = S.phase === "check" ? S.title : (isM ? "Math" : "Reading and Writing");
+  app.innerHTML = `<div class="shell">
+    <header class="top">
+      <div><div class="sect">${esc(sect)}</div>
+        <button class="linkbtn" id="dirs">Directions ${ICON.caret}</button></div>
+      <div class="timer"><span id="tm"></span>${reviewing ? `<span style="font-size:14px">Review</span>` : `<button class="hide" id="hide">${S.hideTimer ? "Show" : "Hide"}</button>`}</div>
+      <div class="tools">
+        ${isM && S.phase !== "check" ? `<button class="tool" id="calcbtn" aria-pressed="${calcOpen}">${ICON.calc}Calculator</button>
+        <button class="tool" id="refbtn">${ICON.ref}Reference</button>` : `<button class="tool" id="notes">${ICON.pen}Notes</button>`}
+        <button class="tool" id="more">${ICON.more}More</button>
+      </div>
+    </header>
+    <div class="dash"></div>
+    <div class="work" id="work"></div>
+    <div class="dash"></div>
+    <footer class="bottom">
+      <div class="who">${esc(S.title)}</div>
+      ${S.phase === "check" ? `<span></span>` : `<button class="navpill" id="nav">Question ${S.i + 1} of ${S.qs.length} ${ICON.caret}</button>`}
+      <div class="btns" id="btns"></div>
+    </footer>
+  </div>`;
+  if (reviewing) $("#tm").textContent = "";
+  $("#dirs").onclick = showDirections;
+  const hb = $("#hide"); if (hb) hb.onclick = () => { S.hideTimer = !S.hideTimer; hb.textContent = S.hideTimer ? "Show" : "Hide"; updTimer(); };
+  const rb = $("#refbtn"); if (rb) rb.onclick = showReference;
+  const nb = $("#notes"); if (nb) nb.onclick = showNotes;
+  $("#more").onclick = showMore;
+  const nv = $("#nav"); if (nv) nv.onclick = showNav;
+  const cb = $("#calcbtn"); if (cb) cb.onclick = () => toggleCalc();
+  if (S.phase === "check") renderCheck(); else renderQuestion();
+  updTimer(); syncCalc();
+}
+
+/* ---------- Desmos: the College Board test-mode calculator (same one Bluebook uses), floating ---------- */
+const CB_DESMOS = "https://www.desmos.com/testing/collegeboard/graphing";
+let calcOpen = false;
+function syncCalc() {
+  $("#calc").hidden = !(calcOpen && view === "test" && S && S.phase !== "check" && curQ().sec === "m");
+}
+function popDesmos() {
+  const w = Math.min(520, Math.round(screen.availWidth * 0.36));
+  const win = window.open(CB_DESMOS, "desmos", `popup,width=${w},height=${screen.availHeight},left=0,top=0`);
+  if (win) { win.focus(); toggleCalc(false); }
+}
+function toggleCalc(force) {
+  calcOpen = force ?? !calcOpen;
+  const b = $("#calcbtn"); if (b) b.setAttribute("aria-pressed", calcOpen);
+  syncCalc();
+  const body = $("#calcbody");
+  // Created once and only hidden afterwards, so graphs survive question changes.
+  if (calcOpen && !body.firstChild) body.innerHTML = `<iframe src="${CB_DESMOS}" title="Desmos graphing calculator, College Board test mode" allow="clipboard-read; clipboard-write"></iframe>`;
+}
+(() => {
+  const el = $("#calc"), bar = $("#calcbar");
+  $("#calcx").onclick = () => toggleCalc(false);
+  $("#calcbig").onclick = () => { el.classList.toggle("big"); $("#calcbig").setAttribute("aria-label", el.classList.contains("big") ? "Collapse" : "Expand"); };
+  $("#calcpop").onclick = popDesmos;
+  bar.addEventListener("pointerdown", e => {
+    if (e.target.closest("button")) return;
+    const r = el.getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top;
+    bar.setPointerCapture(e.pointerId);
+    const move = ev => {
+      el.style.left = Math.max(0, Math.min(innerWidth - 80, ev.clientX - dx)) + "px";
+      el.style.top = Math.max(0, Math.min(innerHeight - 40, ev.clientY - dy)) + "px";
+    };
+    bar.addEventListener("pointermove", move);
+    bar.addEventListener("pointerup", () => bar.removeEventListener("pointermove", move), { once: true });
+  });
+})();
+
+function qbar(q) {
+  return `<div class="qbar"><span class="qnum">${S.i + 1}</span>
+    <button class="mark" id="mark" aria-pressed="${!!S.mark[q.id]}">${ICON.book}Mark for Review</button>
+    ${q.type === "spr" ? "" : `<button class="abc" id="abc" aria-pressed="${S.abc}" title="Cross out answer choices">ABC</button>`}</div>`;
+}
+function locked(q) { return S.phase === "review" || !!S.checked[q.id]; }
+
+function choicesHTML(q, texts) {
+  const lk = locked(q), el = S.elim[q.id] || {};
+  return `<div class="choices" role="radiogroup">${"ABCD".split("").map((L, i) => {
+    let cls = S.ans[q.id] === L ? "sel" : "";
+    if (lk) { if (L === q.answer) cls = "ok"; else if (S.ans[q.id] === L) cls = "bad"; }
+    if (el[L] && !lk) cls += " x";
+    return `<div class="crow"><button class="choice ${cls}" data-l="${L}" role="radio" aria-checked="${S.ans[q.id] === L}" ${lk ? "disabled" : ""}>
+      <span class="lt">${L}</span><span class="ct">${texts[i]}</span></button>
+      ${S.abc && !lk ? `<button class="strike ${el[L] ? "undo" : ""}" data-s="${L}" aria-label="${el[L] ? "Undo cross out" : "Cross out"} ${L}">${el[L] ? "Undo" : L}</button>` : ""}</div>`;
+  }).join("")}</div>`;
+}
+
+// The sentence around the blank with the correct choice dropped in. The first quote from step 1
+// (the aside, subject, or modifier being discussed) is underlined when it appears word for word.
+function filledHTML(q, step1) {
+  const [before, after = ""] = q.passage.split(/_{3,}/);
+  const ends = [...before.matchAll(/[.!?]["”’)]?\s+/g)];
+  const start = ends.length ? ends[ends.length - 1].index + ends[ends.length - 1][0].length : 0;
+  const m = after.match(/[.!?]["”’)]?(\s|$)/);
+  const pre = before.slice(start), post = after.slice(0, m ? m.index + m[0].length : after.length);
+  const ans = q.choices["ABCD".indexOf(q.answer)];
+  const full = pre + ans + post, A = [pre.length, pre.length + ans.length];
+  let H = [0, 0];
+  const hit = (step1.match(/"([^"]+)"/) || [])[1];
+  if (hit && !hit.includes("...") && hit.length < full.length * 0.7) {
+    const m2 = full.match(new RegExp(hit.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/'/g, "['’]")));
+    if (m2) H = [m2.index, m2.index + m2[0].length];
+  }
+  const cuts = [...new Set([0, ...A, ...H, full.length])].sort((a, b) => a - b);
+  return cuts.slice(0, -1).map((c, i) => {
+    let s = esc(full.slice(c, cuts[i + 1]));
+    if (c >= H[0] && c < H[1]) s = `<u>${s}</u>`;
+    if (c >= A[0] && c < A[1]) s = `<mark>${s}</mark>`;
+    return s;
+  }).join("");
+}
+function explainHTML(q) {
+  if (!locked(q)) return "";
+  const r = resultOf(q);
+  const given = S.ans[q.id];
+  let verdict;
+  if (r === null) verdict = `<div class="verdict na">Check your answer${given ? ` (${esc(given)})` : ""} against the explanation below.</div>
+    <div class="selfgrade"><button class="pill line" data-self="1">I got it right</button><button class="pill line" data-self="0">I missed it</button></div>`;
+  else if (r) verdict = `<div class="verdict ok">✓ Correct</div>`;
+  else verdict = `<div class="verdict bad">✗ ${given ? "Incorrect" : "Not answered"} · Correct answer: ${esc(q.answer)}</div>`;
+  const meta = `<div class="meta"><span>${esc(DOM[q.domain].short)}</span><span>${esc(shortSkill(q.skill))}</span><span>${q.difficulty}</span></div>`;
+  if (q.sec === "rw" && EX[q.id]) {
+    const [k, steps, trap] = EX[q.id], [name, rule, ex] = RULES[k], miss = r === false;
+    const cb = q.rationale.map(p => `<p>${esc(p)}</p>`).join("");
+    const qt = s => esc(s).replace(/&quot;([^&]+?)&quot;/g, '<span class="qt">“$1”</span>');
+    return `<div class="explain">${verdict}
+      <div class="rule ${miss ? "miss" : ""}"><div class="rtag">${miss ? "Rule you broke" : "Rule tested"} · ${k}</div>
+        <b>${esc(name)}</b><p>${esc(rule)}</p><p class="rex">e.g. ${esc(ex)}</p></div>
+      <div class="apply"><div class="rtag">Apply it to this question</div>
+        <ol>${steps.map(s => `<li>${qt(s)}</li>`).join("")}</ol>
+        <div class="filled"><div class="lbl">With the answer filled in</div><p>${filledHTML(q, steps[0])}</p></div></div>
+      ${trap ? `<p class="trap"><b>The trap:</b> ${esc(trap)}</p>` : ""}
+      ${meta}
+      <details class="cb"><summary>College Board explanation</summary><div class="rat">${cb}</div></details></div>`;
+  }
+  const rat = q.sec === "rw" ? q.rationale.map(p => `<p>${esc(p)}</p>`).join("") : (IMGS[q.id] ? imgs(IMGS[q.id].r, "Explanation") : "");
+  const dz = DZ[q.id] && DZT[DZ[q.id][1]];
+  if (dz) {
+    const fmt = s => esc(s).replace(/`([^`]+)`/g, "<code>$1</code>");
+    return `<div class="explain">${verdict}
+      <div class="apply dzbox"><div class="rtag">${dz[0]} <span class="dzhint">Calculator is top right. Follow along, then check the numbers in the College Board explanation.</span></div>
+        <ol>${dz[1].map(s => `<li>${fmt(s)}</li>`).join("")}</ol></div>
+      ${meta}
+      <details class="cb" open><summary>College Board explanation (with the actual numbers)</summary><div class="rat">${rat}</div></details></div>`;
+  }
+  return `<div class="explain">${verdict}${meta}<div class="rat">${rat}</div></div>`;
+}
+
+function renderQuestion() {
+  const q = curQ(), work = $("#work");
+  if (q.sec === "rw") {
+    const passage = esc(q.passage).replace(/_{3,}/g, '<span class="blank" aria-label="blank"></span>');
+    work.innerHTML = `<div class="split">
+      <section class="pane"><div class="passage">${passage}</div></section>
+      <div class="divider" aria-hidden="true"></div>
+      <section class="pane"><div class="right-inner">${qbar(q)}
+        <p class="prompt">${esc(q.prompt)}</p>
+        ${choicesHTML(q, q.choices.map(esc))}
+        ${explainHTML(q)}</div></section></div>`;
+  } else {
+    const im = IMGS[q.id];
+    if (!im) {
+      work.innerHTML = `<div class="single"><div class="loading">Loading question…</div></div>`;
+      const want = q.id;
+      loadChunk(q.chunk).then(() => { if (view === "test" && curQ().id === want && S.phase !== "check") renderQuestion(); })
+        .catch(() => { if (curQ().id === want) work.innerHTML = `<div class="single"><div class="loading">This question's images didn't load. Check your connection, then go to another question and back.</div></div>`; });
+      return;
+    }
+    if (q.type === "spr") {
+      const v = S.ans[q.id] || "";
+      work.innerHTML = `<div class="split spr">
+        <section class="pane"><div class="spr-dir"><h3>Student-produced response directions</h3>
+          <ul><li>If you find more than one correct answer, enter only one.</li>
+          <li>Positive answers can be up to 5 characters, negative answers up to 6 (the minus sign counts).</li>
+          <li>For a fraction that doesn't fit, enter its decimal form.</li>
+          <li>For a decimal that doesn't fit, cut it off or round it at the fourth digit.</li>
+          <li>Mixed numbers aren't allowed: enter 3½ as 7/2 or 3.5.</li>
+          <li>Leave out symbols like $, %, commas, and units.</li></ul>
+          <table><tr><th>Answer</th><th>Accepted</th><th>Not accepted</th></tr>
+          <tr><td>3.5</td><td>3.5, 7/2</td><td>3 1/2</td></tr>
+          <tr><td>2/3</td><td>2/3, .6666, .6667</td><td>0.66, .67</td></tr>
+          <tr><td>−15</td><td>-15</td><td></td></tr></table></div></section>
+        <div class="divider" aria-hidden="true"></div>
+        <section class="pane"><div class="right-inner">${qbar(q)}
+          <div class="stem">${imgs(im.q, "Question")}</div>
+          <label for="spr" class="sr" style="font-size:13px;color:var(--muted)">Your answer</label><br>
+          <input id="spr" class="spr-in" inputmode="decimal" autocomplete="off" maxlength="6" value="${esc(v)}" ${locked(q) ? "disabled" : ""}>
+          <div class="preview">Answer Preview: <b id="pv">${esc(v)}</b></div>
+          ${explainHTML(q)}</div></section></div>`;
+      const inp = $("#spr");
+      inp.oninput = () => { inp.value = inp.value.replace(/[^0-9./-]/g, "").slice(0, inp.value.startsWith("-") ? 6 : 5); S.ans[q.id] = inp.value; $("#pv").textContent = inp.value; renderBtns(); };
+    } else {
+      work.innerHTML = `<div class="single"><div class="inner">${qbar(q)}
+        <div class="stem">${imgs(im.q, "Question")}</div>
+        ${choicesHTML(q, "abcd".split("").map(k => imgs(im[k], "Choice " + k.toUpperCase())))}
+        ${explainHTML(q)}</div></div>`;
+    }
+  }
+  // prefetch the next math question's images
+  const nx = byId[S.qs[S.i + 1]]; if (nx && nx.sec === "m") loadChunk(nx.chunk).catch(() => {});
+  wireQuestion(q);
+  renderBtns();
+}
+
+function wireQuestion(q) {
+  const work = $("#work");
+  const mk = $("#mark"); if (mk) mk.onclick = () => { S.mark[q.id] = !S.mark[q.id]; mk.setAttribute("aria-pressed", !!S.mark[q.id]); };
+  const ab = $("#abc"); if (ab) ab.onclick = () => { S.abc = !S.abc; renderQuestion(); };
+  work.querySelectorAll(".choice").forEach(b => b.onclick = () => {
+    if (locked(q)) return;
+    const L = b.dataset.l;
+    if (S.elim[q.id] && S.elim[q.id][L]) S.elim[q.id][L] = false;
+    S.ans[q.id] = S.ans[q.id] === L && S.fb === "end" ? undefined : L;
+    renderQuestion();
+  });
+  work.querySelectorAll(".strike").forEach(b => b.onclick = () => {
+    const L = b.dataset.s, e = S.elim[q.id] || (S.elim[q.id] = {});
+    e[L] = !e[L]; if (e[L] && S.ans[q.id] === L) delete S.ans[q.id];
+    renderQuestion();
+  });
+  work.querySelectorAll("[data-self]").forEach(b => b.onclick = () => {
+    S.self[q.id] = b.dataset.self === "1";
+    if (S.fb === "instant" || S.phase === "review") record(q, S.self[q.id]);
+    renderQuestion();
+  });
+}
+
+function renderBtns() {
+  const q = curQ(), box = $("#btns"); if (!box) return;
+  const last = S.i === S.qs.length - 1;
+  let h = "";
+  if (S.i > 0) h += `<button class="pill blue" id="back">Back</button>`;
+  if (S.phase === "review") h += last ? `<button class="pill blue" id="toRes">Results</button>` : `<button class="pill blue" id="next">Next</button>`;
+  else if (S.fb === "instant" && !S.checked[q.id]) h += `<button class="pill blue" id="chk" ${S.ans[q.id] ? "" : "disabled"}>Check</button>`;
+  else h += `<button class="pill blue" id="next">${last ? (S.fb === "instant" ? "Finish" : "Next") : "Next"}</button>`;
+  box.innerHTML = h;
+  const bk = $("#back"); if (bk) bk.onclick = () => go(S.i - 1);
+  const nx = $("#next"); if (nx) nx.onclick = () => last ? (S.phase === "review" ? finish() : (S.phase = "check", renderTest())) : go(S.i + 1);
+  const ck = $("#chk"); if (ck) ck.onclick = () => { S.checked[q.id] = true; record(q, resultOf(q)); renderQuestion(); };
+  const tr = $("#toRes"); if (tr) tr.onclick = finish;
+}
+function go(i) { S.i = Math.max(0, Math.min(S.qs.length - 1, i)); if (S.phase === "check") S.phase = "test"; closePop(); renderTest(); }
+
+/* ---------- check-your-work page (end of set) ---------- */
+function renderCheck() {
+  const answered = S.qs.filter(id => S.ans[id]).length;
+  $("#work").innerHTML = `<div class="checkpage"><div class="inner">
+    <h2>${S.timeUp ? "Time's up" : "Check your work"}</h2>
+    <p>${S.timeUp ? "Your time ran out. Submit to see how you did." : `You answered ${answered} of ${S.qs.length}. Select a number to go back to that question, or submit when you're ready.`}</p>
+    <div class="panel">${navGrid()}</div></div></div>`;
+  $("#work").querySelectorAll("[data-go]").forEach(b => b.onclick = () => go(+b.dataset.go));
+  $("#btns").innerHTML = `${S.timeUp ? "" : `<button class="pill blue" id="back">Back</button>`}<button class="pill blue" id="sub">Submit</button>`;
+  const bk = $("#back"); if (bk) bk.onclick = () => go(S.qs.length - 1);
+  $("#sub").onclick = submit;
+}
+function submit() {
+  clearInterval(tick);
+  S.spent = Math.round((Date.now() - S.start) / 1000);
+  for (const id of S.qs) { const q = byId[id]; if (!S.checked[id]) { S.checked[id] = true; record(q, resultOf(q)); } }
+  finish();
+}
+function navGrid(withResults) {
+  return `<div class="legend"><span>▼ Current</span><span><i class="sw"></i>Unanswered</span><span><i class="sw a"></i>Answered</span><span><i class="sw" style="border:0;background:var(--flag);clip-path:polygon(0 0,100% 0,100% 100%,50% 75%,0 100%)"></i>For review</span></div>
+    <div class="grid">${S.qs.map((id, i) => {
+      let c = S.ans[id] ? "ans" : "";
+      if (withResults || S.phase === "review" || S.checked[id]) { const r = resultOf(byId[id]); c = r === true ? "right" : r === false ? "wrong" : c; }
+      if (S.mark[id]) c += " mk";
+      if (i === S.i && S.phase !== "check") c += " cur";
+      return `<button class="gq ${c}" data-go="${i}" aria-label="Question ${i + 1}">${i + 1}</button>`;
+    }).join("")}</div>`;
+}
+
+/* ---------- popovers ---------- */
+function closePop() { document.querySelectorAll(".pop,.menu").forEach(e => e.remove()); }
+function pop(html, center) {
+  closePop();
+  const d = document.createElement("div");
+  d.className = "pop" + (center ? " center" : "");
+  d.innerHTML = `<div class="panel" role="dialog" aria-modal="true"><button class="x" aria-label="Close">×</button>${html}</div>`;
+  d.onclick = e => { if (e.target === d || e.target.classList.contains("x")) closePop(); };
+  document.body.appendChild(d);
+  return d;
+}
+function showNav() {
+  const d = pop(`<h3>${esc(S.title)} Questions</h3>${navGrid()}
+    ${S.phase === "test" ? `<div class="center"><button class="pill line" id="toCheck">Go to Review Page</button></div>` : ""}`);
+  d.querySelectorAll("[data-go]").forEach(b => b.onclick = () => go(+b.dataset.go));
+  const tc = $("#toCheck", d); if (tc) tc.onclick = () => { closePop(); S.phase = "check"; renderTest(); };
+}
+function showDirections() {
+  pop(`<h3>Directions</h3>
+    <p>These questions come from the official SAT question bank and were picked for the areas where your score reports show the most room to grow.</p>
+    <p><b>Reading and Writing:</b> each question has a short passage on the left. Pick the choice that completes the text so it follows the conventions of Standard English.</p>
+    <p><b>Math:</b> for multiple-choice questions, pick one answer. For student-produced responses, type your answer in the box. Use your own Desmos calculator if you like; the Calculator button opens one in a new tab.</p>
+    <p>${S.timed ? `The timer gives you real-test pace: ${SECS.rw} seconds per Reading and Writing question and ${SECS.m} seconds per Math question.` : "This set is untimed. The clock counts up."}
+    ${S.fb === "instant" ? "Press Check after each question to see the answer and explanation." : "Answers and explanations appear after you submit."}</p>
+    <p>Use <b>ABC</b> to cross out choices and <b>Mark for Review</b> to flag a question.</p>`, true);
+}
+function showReference() {
+  const F = [["Circle area", "A = πr²"], ["Circumference", "C = 2πr"], ["Rectangle", "A = ℓw"], ["Triangle", "A = ½bh"],
+    ["Pythagorean theorem", "c² = a² + b²"], ["30°-60°-90°", "x, x√3, 2x"], ["45°-45°-90°", "s, s, s√2"],
+    ["Rectangular prism", "V = ℓwh"], ["Cylinder", "V = πr²h"], ["Sphere", "V = 4⁄3 πr³"], ["Cone", "V = 1⁄3 πr²h"], ["Pyramid", "V = 1⁄3 ℓwh"],
+    ["Arc of a circle", "360° = 2π radians"], ["Triangle angles", "sum to 180°"]];
+  pop(`<h3>Reference</h3><div class="ref">${F.map(([a, b]) => `<div><b>${a}</b><code>${b}</code></div>`).join("")}</div>`, true);
+}
+function showNotes() {
+  pop(`<h3>Scratch notes</h3><textarea id="notesTxt" rows="8" style="width:100%;font:15px/1.5 var(--sans);padding:10px;border:1px solid var(--line-strong);border-radius:8px">${esc(S.notes || "")}</textarea>`, true);
+  const t = $("#notesTxt"); t.oninput = () => S.notes = t.value; t.focus();
+}
+function showMore() {
+  closePop();
+  const m = document.createElement("div"); m.className = "menu";
+  m.innerHTML = `<button id="mFb">Show answers: ${S.fb === "instant" ? "after each question" : "at the end"}</button>
+    ${S.phase === "review" ? "" : `<button id="mSubmit">Submit set now</button>`}
+    <button id="mExit">Exit to plan (set is discarded)</button>`;
+  document.body.appendChild(m);
+  setTimeout(() => document.addEventListener("click", function h(e) { if (!m.contains(e.target)) { m.remove(); document.removeEventListener("click", h); } }), 0);
+  $("#mFb").onclick = () => { S.fb = S.fb === "instant" ? "end" : "instant"; m.remove(); renderTest(); };
+  const ms = $("#mSubmit"); if (ms) ms.onclick = () => { m.remove(); submit(); };
+  $("#mExit").onclick = () => { m.remove(); S = null; renderHome(); };
+}
+
+/* ---------- results ---------- */
+function finish() {
+  clearInterval(tick); view = "results"; $("#calc").hidden = true;
+  if (S.spent == null) S.spent = Math.round((Date.now() - S.start) / 1000);
+  const rs = S.qs.map(id => [byId[id], resultOf(byId[id])]);
+  const right = rs.filter(r => r[1] === true).length;
+  const per = {};
+  rs.forEach(([q, r]) => { const o = per[q.domain] || (per[q.domain] = { r: 0, n: 0 }); o.n++; if (r) o.r++; });
+  const missedHere = rs.filter(r => r[1] === false).map(r => r[0]);
+  const app = $("#app"); app.className = "res";
+  app.innerHTML = `<header class="hero">${decoPills()}<div class="wrap">
+      <a class="back" href="/">← willy.work</a>
+      <div class="brand">${esc(S.title)} · results</div>
+      <h1>Set complete</h1>
+      <p>${fmt(S.spent)} spent${S.timed ? ` of ${fmt(S.limit)} allowed` : ""}.</p>
+      <div class="row"><button class="pill white" id="again">New smart set</button>
+      ${missedHere.length ? `<button class="pill ghost" id="redo">Redo the ${missedHere.length} you missed</button>` : ""}
+      <button class="pill ghost" id="home">Back to plan</button></div></div></header>
+    <main class="wrap">
+      <section class="card"><div class="bigscore"><b>${right}/${rs.length}</b><span>correct · ${Math.round(100 * right / rs.length)}%</span></div>
+        <div class="dbreak" style="margin-top:18px">${Object.entries(per).map(([d, o]) => `<div><small>${esc(DOM[d].short)}</small><br><b>${o.r}/${o.n}</b></div>`).join("")}</div></section>
+      <section class="card"><h2>Review questions</h2><p class="sub">Open any question to see it with the answer and explanation.</p>
+        <div class="rlist">${rs.map(([q, r], i) => `<button class="ritem" data-rv="${i}">
+          <span class="n">${i + 1}</span><span class="${r === true ? "mk-ok" : r === false ? "mk-bad" : "mk-na"}">${r === true ? "✓" : r === false ? "✗" : "?"}</span>
+          <span class="s">${esc(shortSkill(q.skill))}<small>${esc(DOM[q.domain].short)}</small></span><span class="d">${q.difficulty}</span></button>`).join("")}</div></section>
+    </main>`;
+  window.scrollTo(0, 0);
+  $("#again").onclick = () => startSet(pick(Q, 15), "Smart Set");
+  $("#home").onclick = renderHome;
+  const rd = $("#redo"); if (rd) rd.onclick = () => startSet(missedHere, "Redo Missed");
+  app.querySelectorAll("[data-rv]").forEach(b => b.onclick = () => { S.phase = "review"; S.i = +b.dataset.rv; view = "test"; renderTest(); });
+}
+
+/* ---------- keyboard: A–D pick, arrows move ---------- */
+document.addEventListener("keydown", e => {
+  if (view !== "test" || !S || S.phase === "check" || e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.closest?.("#calc") || e.metaKey || e.ctrlKey) return;
+  const k = e.key.toUpperCase();
+  if ("ABCD".includes(k) && k.length === 1 && curQ().type !== "spr") { const b = $(`.choice[data-l="${k}"]`); if (b && !b.disabled) b.click(); }
+  else if (e.key === "ArrowRight") { const b = $("#next") || $("#chk"); if (b && !b.disabled) b.click(); }
+  else if (e.key === "ArrowLeft") { const b = $("#back"); if (b) b.click(); }
+  else if (e.key === "Escape") closePop();
+});
+
+if (!B) $("#app").innerHTML = `<p style="padding:40px;text-align:center">The question bank file (data/bank.js) didn't load.</p>`;
+else renderHome();
+</script>
+</body>
+</html>
