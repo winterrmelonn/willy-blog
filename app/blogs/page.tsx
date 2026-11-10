@@ -57,10 +57,11 @@ export default async function Page() {
   return (
     <main className="relative flex-1">
       <section id="river-hero" className="river-hero">
-        {/* a frosted card keeps the text readable over the water */}
-        <div className="max-w-2xl mt-6 mx-4 sm:mx-auto rounded-3xl px-6 pb-6 pt-1 bg-white/60 dark:bg-black/45 backdrop-blur-md">
+        {/* straight on the scene, with a soft glow behind the letters so they read over the water */}
+        <div className="max-w-2xl mt-6 mx-4 sm:mx-auto px-6 pb-6 pt-1 [text-shadow:0_0_2px_#fff,0_0_5px_#fff,0_0_10px_#fff,0_0_22px_rgb(255_255_255/.85)]
+          dark:[text-shadow:0_0_2px_#000,0_0_5px_#000,0_0_10px_#000,0_0_22px_rgb(0_0_0/.85)]">
           <AboutEditor title={saved?.title || DEFAULT.title} body={saved?.body ?? DEFAULT.body} admin={admin} />
-          <a href="#river-flow" className="mt-4 inline-block rounded-full px-5 py-2 bg-black dark:bg-white text-white dark:text-black hover:opacity-80">My Blogs</a>
+          <a href="#river-flow" className="mt-4 inline-block rounded-full px-5 py-2 bg-black dark:bg-white text-white dark:text-black hover:opacity-80 [text-shadow:none]">My Blogs</a>
         </div>
       </section>
       <div id="river-flow" className="river-flow">

@@ -1122,13 +1122,13 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
 }
 
 // The first screen and the way off it, separate from the scene so it works without WebGL. About me fades and
-// lifts away as you scroll (--hero-p, 0..1, on the page; app/blogs/timeline.css). The only way down is My Blogs,
-// which glides through the camera's climb to the river: on the first screen, wheel, touch and keys don't scroll
-// (they nudge the button instead), unless About me is being edited. Down in the timeline the page scrolls as
-// usual; scroll back above it and the page glides back up to About me, so it never rests mid-climb.
+// lifts away as you scroll (--hero-p, 0..1, on the page; app/blogs/timeline.css). Between the two views the camera
+// is mid-climb, which looks wrong to stop on, so the page never rests there: My Blogs, or any scroll down from
+// About me (wheel, touch or keys), glides all the way through the climb to the river, and a scroll up from the top
+// of the timeline glides back. Not while About me is being edited, so the form can scroll.
 function heroScroll(hero: HTMLElement) {
     const easeInOut = (k: number) => (k < 0.5 ? 4 * k * k * k : 1 - (-2 * k + 2) ** 3 / 2);
-    let queued = false, glide = 0, gliding = false, touching = false, touchY = 0, lastY = scrollY, dir = 1, rest = 0;
+    let queued = false, glide = 0, gliding = false, touching = false, touchY = 0, lastY = scrollY, dir = 1, rest = 0, calm = 0;
     const link = hero.querySelector<HTMLAnchorElement>('a[href="#river-flow"]');
     function glideTo(to: number) {
         cancelAnimationFrame(glide);
@@ -1139,14 +1139,19 @@ function heroScroll(hero: HTMLElement) {
             const k = Math.min(1, (now - t0) / ms);
             scrollTo({ top: from + (to - from) * easeInOut(k), behavior: "instant" });
             if (k < 1) glide = requestAnimationFrame(step);
-            else gliding = false;
+            else { gliding = false; calm = performance.now() + 500; } // let a trackpad's momentum die out first
         };
         glide = requestAnimationFrame(step);
     }
     const editing = () => !!hero.querySelector("input, textarea");
-    const locked = () => scrollY < hero.offsetHeight - 2 && !editing();
-    const nudge = () => { if (!gliding) link?.classList.add("river-nudge"); };
-    const unNudge = () => link?.classList.remove("river-nudge");
+    // Whether a scroll this way is ours to turn into a glide: anything on the first screen or mid-climb, and
+    // scrolling up from the top of the timeline. Returns false to let the page scroll as usual.
+    function take(down: boolean) {
+        const h = hero.offsetHeight;
+        if (editing() || !(scrollY < h - 2 || (!down && scrollY <= h + 2) || gliding || performance.now() < calm)) return false;
+        if (!gliding && performance.now() >= calm) glideTo(down ? h : 0);
+        return true;
+    }
     function settle() { // a scroll that came to rest mid-climb (the scrollbar, momentum) goes on the way it was going
         const h = hero.offsetHeight;
         if (gliding || touching || editing()) return;
@@ -1166,15 +1171,13 @@ function heroScroll(hero: HTMLElement) {
         });
     };
     const onWheel = (e: WheelEvent) => {
-        if (!locked() || e.ctrlKey) return; // ctrl: pinch-zooming
-        e.preventDefault();
-        if (e.deltaY > 0) nudge();
+        if (e.ctrlKey || !e.deltaY) return; // ctrl: pinch-zooming
+        if (take(e.deltaY > 0)) e.preventDefault();
     };
     const KEYS = new Set([" ", "PageDown", "PageUp", "ArrowDown", "ArrowUp", "End", "Home"]);
     const onKey = (e: KeyboardEvent) => {
-        if (!locked() || !KEYS.has(e.key) || (e.target as HTMLElement).closest?.("input, textarea, select, button, [contenteditable]")) return;
-        e.preventDefault();
-        if (!["ArrowUp", "PageUp", "Home"].includes(e.key)) nudge();
+        if (!KEYS.has(e.key) || (e.target as HTMLElement).closest?.("input, textarea, select, button, [contenteditable]")) return;
+        if (take(!["ArrowUp", "PageUp", "Home"].includes(e.key))) e.preventDefault();
     };
     const onTouch = (e: TouchEvent) => {
         touching = e.type === "touchstart";
@@ -1182,9 +1185,13 @@ function heroScroll(hero: HTMLElement) {
         else later();
     };
     const onTouchMove = (e: TouchEvent) => {
-        if (!locked() || e.touches.length > 1 || !e.cancelable) return; // two fingers: pinch-zooming
-        e.preventDefault();
-        if (touchY - e.touches[0].clientY > 12) nudge();
+        if (e.touches.length > 1 || !e.cancelable) return; // two fingers: pinch-zooming
+        const dy = touchY - e.touches[0].clientY; // > 0: the finger moves up, scrolling down
+        if (Math.abs(dy) < 8) { // too small to tell which way yet; on the first screen, don't let the page start moving
+            if (!editing() && scrollY < hero.offsetHeight - 2) e.preventDefault();
+            return;
+        }
+        if (take(dy > 0)) e.preventDefault();
     };
     const onLink = (e: MouseEvent) => { e.preventDefault(); glideTo(hero.offsetHeight); };
     addEventListener("scroll", onScroll, { passive: true });
@@ -1194,7 +1201,6 @@ function heroScroll(hero: HTMLElement) {
     addEventListener("touchend", onTouch, { passive: true });
     addEventListener("touchmove", onTouchMove, { passive: false });
     link?.addEventListener("click", onLink);
-    link?.addEventListener("animationend", unNudge);
     onScroll();
     return () => {
         cancelAnimationFrame(glide);
@@ -1206,7 +1212,6 @@ function heroScroll(hero: HTMLElement) {
         removeEventListener("touchend", onTouch);
         removeEventListener("touchmove", onTouchMove);
         link?.removeEventListener("click", onLink);
-        link?.removeEventListener("animationend", unNudge);
     };
 }
 

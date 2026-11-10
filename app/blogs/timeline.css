@@ -6,10 +6,6 @@
    way down. The right-hand post sits lower than the left, so the posts read as a zigzag timeline. */
 .river-hero { position: relative; min-height: 100svh; }
 .river-hero > div { opacity: calc(1 - var(--hero-p, 0) * 1.6); transform: translate3d(0, calc(var(--hero-p, 0) * -90px), 0); }
-/* Scrolling doesn't leave the first screen, My Blogs does: a blocked scroll gives the button a little hop */
-.river-nudge { animation: river-nudge .55s cubic-bezier(.3, .7, .4, 1); }
-@keyframes river-nudge { 35% { transform: translateY(5px) scale(1.06); } 70% { transform: translateY(-2px); } }
-@media (prefers-reduced-motion: reduce) { .river-nudge { animation-duration: 1ms; } }
 
 .river-flow { --ch: clamp(260px, 30vw, 460px); --ch-n: clamp(76px, 22vw, 210px);
               display: grid; align-content: start; row-gap: 56px; max-width: 1360px; margin: 0 auto; padding: 14vh 28px 80px;
