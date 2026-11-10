@@ -12,5 +12,5 @@ export async function saveAbout(title: string, body: string) {
     if (typeof title !== "string" || typeof body !== "string") throw new Error("Bad input");
     await dbConnect();
     await About.findOneAndUpdate({}, { title: title.slice(0, 300), body: body.slice(0, 20000) }, { upsert: true });
-    revalidatePath("/about");
+    revalidatePath("/blogs");
 }

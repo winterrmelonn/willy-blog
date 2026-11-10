@@ -1,12 +1,15 @@
 "use client";
 
-// The stream behind the About page, ported from the AquaPlot about page (~/Documents/aquaplot/src/aquaplot/
+// The stream behind /blogs, ported from the AquaPlot about page (~/Documents/aquaplot/src/aquaplot/
 // static/about.html). It's one small world drawn by shaders with no images: a channel deeper and faster in
 // the middle, with pebbles and caustics on the bed, boulders the current foams around, reeds on the banks
-// and leaves riding the surface, seen from low down looking upstream. AquaPlot also flew the camera down
-// the page as you scrolled and bent the river round its text; this page is short, so only the opening
-// view came over. Restyled after a Chinese mountain stream: jade water, mossy boulders, bonsai-like
-// trees, stone lanterns and a red pavilion upstream in the mist.
+// and leaves riding the surface. Restyled after a Chinese mountain stream: jade water, mossy boulders,
+// bonsai-like trees, stone lanterns and a red pavilion upstream in the mist.
+// The page scroll flies the camera, as on AquaPlot: a low view up the stream behind About me (#river-hero),
+// rising to look straight down on it. From above, the river runs down the channels the posts leave free
+// (#river-flow .ch, see app/blogs/timeline.css), bending from one to the next, and scrolls exactly with the
+// page so the bends stay beside the posts they go round. The trees, lanterns, bridge and pavilion belong to
+// the low view and fade out as the camera rises.
 // Decorative: if WebGL is missing the soft gradient behind the canvas stays.
 
 import { useEffect, useRef } from "react";
@@ -17,16 +20,20 @@ import { useDarkMode } from "./darkmode";
 
 const LEN = 140; // length of the stretch of world kept around the camera
 const ROCKS = 14;
+const TOP_FOV = 30; // the camera's field of view looking straight down
 const BRIDGE_Z = -0.5; // where the red bridge crosses, just ahead of the camera
 const f = (v: number) => v.toFixed(5);
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v)), ease = (v: number) => v * v * (3 - 2 * v);
+const mix = (a: number, b: number, k: number) => a + (b - a) * k;
 
-// The river's centre and half-width at z (the shaders' river() below is the same curve)
-const river = (z: number) => [0.35 * Math.sin(z * 0.11) + 0.2 * Math.sin(z * 0.23 + 1.3), 3.0 + 0.2 * Math.sin(z * 0.07 + 2.0)];
+// The low view's gentle meander: centre and half-width at z (the shaders' river() below is the same curve)
+const heroRiver = (z: number) => [0.35 * Math.sin(z * 0.11) + 0.2 * Math.sin(z * 0.23 + 1.3), 3.0 + 0.2 * Math.sin(z * 0.07 + 2.0)];
 const smoothstep = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const bankHeight = (d: number) => { const k = smoothstep(0.95, 1.4, d); return (-1.05 + 0.7 * d * d) * (1 - k) + 0.42 * k; }; // d: 1 at the water's edge
 const flowSpeed = (a: number) => 0.25 + 1.5 * Math.max(0, 1 - a * a);
 
 const COMMON = `
+    uniform sampler2D uPath; uniform vec2 uPathRange; uniform float uPathMix;
     float hash1(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
     vec2 hash2(vec2 p) { vec3 q = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973)); q += dot(q, q.yzx + 33.33);
                          return fract((q.xx + q.yz) * q.zy); }
@@ -39,8 +46,10 @@ const COMMON = `
       for (int i = 0; i < 4; i++) { s += a * vnoise(p); p = p * 2.03 + vec2(17.1, 9.2); a *= 0.5; }
       return s / 0.9375;
     }
-    vec2 river(float z) {  // centre and half-width of the channel at z
-      return vec2(0.35 * sin(z * 0.11) + 0.2 * sin(z * 0.23 + 1.3), 3.0 + 0.2 * sin(z * 0.07 + 2.0));
+    vec2 river(float z) {  // centre and half-width of the channel at z: the meander, becoming the page's path
+      vec2 hero = vec2(0.35 * sin(z * 0.11) + 0.2 * sin(z * 0.23 + 1.3), 3.0 + 0.2 * sin(z * 0.07 + 2.0));
+      if (uPathMix <= 0.0) return hero;
+      return mix(hero, texture2D(uPath, vec2((z - uPathRange.x) * uPathRange.y, 0.5)).rg, uPathMix);
     }
     float across(vec2 p) { vec2 r = river(p.y); return (p.x - r.x) / r.y; }   // 0 mid-channel, 1 at the edge
     float ground(vec2 p) {   // the bed, deepest in the middle, rising into the banks
@@ -105,8 +114,9 @@ const CAUSTIC_GLSL = `
       return pow(abs(c), 8.0);
     }`;
 
-// Builds the scene on `canvas` (sized to `host`). Returns setDark() and a cleanup.
-function start(canvas: HTMLCanvasElement, host: HTMLElement) {
+// Builds the scene on `canvas` (sized to `host`), flying over `hero` into a river round `flow`'s channels.
+// Returns setDark(), start() and a cleanup.
+function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, flow: HTMLElement) {
     let renderer: THREE.WebGLRenderer;
     try {
         renderer = new THREE.WebGLRenderer({ canvas, antialias: devicePixelRatio < 1.5 });
@@ -119,10 +129,13 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement) {
     const world = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(44, 1, 0.1, 600);
     const color = () => new THREE.Color();
+    const blankPath = new THREE.DataTexture(new Uint16Array(4), 2, 1, THREE.RGFormat, THREE.HalfFloatType);
+    blankPath.needsUpdate = true;
     const uniforms: Record<string, THREE.IUniform> = {
         uTime: { value: 0 }, uAnchor: { value: 0 }, uFogNear: { value: 8 }, uFogFar: { value: 26 },
         uEdge: { value: new THREE.Vector2(38, 48) }, uBank: { value: new THREE.Vector2(3.5, 9) },
         uWin: { value: new THREE.Vector2(-30, 48) },
+        uPath: { value: blankPath }, uPathRange: { value: new THREE.Vector2(0, 1) }, uPathMix: { value: 0 },
         uNight: { value: 0 }, uPointK: { value: 7 }, uDpr: { value: renderer.getPixelRatio() }, uReflect: { value: 0.8 }, uSpread: { value: 1 },
         uDeep: { value: color() }, uShallow: { value: color() }, uSky: { value: color() }, uSun: { value: color() },
         uFog: { value: color() }, uFoam: { value: color() }, uCaustic: { value: color() },
@@ -132,6 +145,16 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement) {
         // A low sun upstream: its glitter lies on the far water, never in the reader's lap.
         uLight: { value: new THREE.Vector3(-0.3, 0.5, -1.0).normalize() },
         uRocks: { value: Array.from({ length: ROCKS }, () => new THREE.Vector4()) },
+    };
+    // The river's shape. In the low view, the meander; from above, the path measured from the page, stored
+    // in a small texture every shader reads. pathMix blends one into the other as the camera rises.
+    let path: { n: number; xs: Float32Array; ws: Float32Array; z0: number; dz: number } | null = null, pathMix = 0;
+    const river = (z: number) => { // [centre, half-width] at z, exactly as the shaders see it
+        const [hx, hw] = heroRiver(z);
+        if (!path || pathMix <= 0) return [hx, hw];
+        const u = Math.min(path.n - 1, Math.max(0, (z - path.z0) / path.dz - 0.5));
+        const i = Math.min(Math.floor(u), path.n - 2), k = u - i;
+        return [mix(hx, mix(path.xs[i], path.xs[i + 1], k), pathMix), mix(hw, mix(path.ws[i], path.ws[i + 1], k), pathMix)];
     };
     // A strip along z whose columns are offsets from the river's centre, packed towards it
     const strip = (w: number, segX: number, segZ: number, curve: number) => {
@@ -384,7 +407,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement) {
       }`,
     });
     const v3 = new THREE.Vector3();
-    for (let i = 0; i < ROCKS; i++) {
+    const rocks = Array.from({ length: ROCKS }, (_, i) => {
         const sx = 0.35 + rng() * 0.6, sy = 0.3 + rng() * 0.3, sz = sx * (0.8 + rng() * 0.5);
         const top = -0.12 + rng() * 0.42, yc = top - sy;
         const geo = new THREE.IcosahedronGeometry(1, 2);
@@ -409,12 +432,12 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement) {
         let z = -30 + ((i + rng() * 0.8) / ROCKS) * 48;
         if (z > 0 && z < 12) z -= 14; // none right under the camera, where one fills the view
         if (Math.abs(z - BRIDGE_Z) < 2.5) z -= 5; // nor under the bridge
-        const [cx, w] = river(z), k = Math.min(1.1, w / 3), x = cx + (rng() * 2 - 1) * 0.72 * w;
-        mesh.scale.set(sx * k, sy * k, sz * k);
-        mesh.position.set(x, yc * k, z);
-        uniforms.uRocks.value[i].set(x, z, (breaks ? sx * Math.sqrt(1 - (yc / sy) ** 2) : sx * 0.7) * k, breaks ? 1 : 0.35);
+        // placed every frame (draw), in a window round the camera, scaled with the river they sit in
+        mesh.userData = { z, off: (rng() * 2 - 1) * 0.72, size: [sx, sy, sz], yc,
+            r: breaks ? sx * Math.sqrt(1 - (yc / sy) ** 2) : sx * 0.7, strength: breaks ? 1 : 0.35 };
         world.add(mesh);
-    }
+        return mesh;
+    });
 
     // Solid shapes in one colour each, merged into one mesh per object (vertex colours, no textures)
     const painted = (g: THREE.BufferGeometry, hex: string) => {
@@ -425,7 +448,15 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement) {
         out.setAttribute("color", new THREE.BufferAttribute(col, 3));
         return out;
     };
-    const solid = () => new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide });
+    // The low view's scenery (trees, lanterns, bridge, pavilion), faded out as the camera rises (draw).
+    // Its materials are always transparent, so fading never recompiles a shader.
+    const decor = new THREE.Group(), decorMats: THREE.Material[] = [];
+    world.add(decor);
+    const solid = () => {
+        const m = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide, transparent: true });
+        decorMats.push(m);
+        return m;
+    };
     // things whose colours dim at night: [material, how bright at night]
     const dimmed: [THREE.MeshLambertMaterial, number][] = [];
 
@@ -548,7 +579,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement) {
             const shade = 0.85 + rng() * 0.25; // each one a touch lighter or darker, warmer or cooler
             mesh.setColorAt(i, tint.setRGB(shade * (0.97 + rng() * 0.06), shade, shade * (0.95 + rng() * 0.08)));
         }
-        world.add(mesh);
+        decor.add(mesh);
     }
 
     // ---- stone lanterns on the banks: base, pillar, a lamp box that glows at night, a curved roof and a jewel
@@ -564,7 +595,8 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement) {
     ])!;
     const lanternMat = solid();
     dimmed.push([lanternMat, 0.4]);
-    const lampMat = new THREE.MeshBasicMaterial({ color: "#e9dcc0" }); // paper windows, lit from inside at night
+    const lampMat = new THREE.MeshBasicMaterial({ color: "#e9dcc0", transparent: true }); // paper windows, lit from inside at night
+    decorMats.push(lampMat);
     const glowTexture = (() => {
         const c = document.createElement("canvas");
         c.width = c.height = 64;
@@ -591,7 +623,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement) {
         glow.position.set(0, 0.78, 0);
         glow.scale.setScalar(1.6);
         stone.add(lamp, glow);
-        world.add(stone);
+        decor.add(stone);
     }
 
     // ---- a red arched bridge (taiko-bashi) across the stream: a curved plank deck on vermilion piers,
@@ -639,7 +671,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement) {
         const [cx] = river(BRIDGE_Z);
         bridge.position.set(cx, 0, BRIDGE_Z);
         bridge.rotation.y = Math.atan2(river(BRIDGE_Z + 0.5)[0] - river(BRIDGE_Z - 0.5)[0], 1); // square across the current
-        world.add(bridge);
+        decor.add(bridge);
     }
 
     // ---- a red pavilion upstream on the far bank, half lost in the mist
@@ -663,7 +695,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement) {
         pavilion.position.set(PAV_X, 0.42, PAV_Z);
         pavilion.scale.setScalar(0.75);
         pavilion.rotation.y = -0.3;
-        world.add(pavilion);
+        decor.add(pavilion);
     }
 
     // ---- koi swimming slowly upstream, weaving a little, just under the surface. The fish is
@@ -680,8 +712,9 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement) {
     };
     dimmed.push([koiMat, 0.45]);
     const koi = Array.from({ length: KOI }, () => {
-        const z = -24 + rng() * 30, [cx, w] = river(z);
-        return { x: cx + (rng() * 2 - 1) * 0.5 * w, z, heading: (rng() - 0.5) * 2.4 + (rng() < 0.25 ? Math.PI : 0), // mostly upstream
+        const z = -24 + rng() * 30;
+        // a: across the stream (0 mid-channel, ±1 at the edges), so they stay in the water wherever it goes
+        return { a: (rng() * 2 - 1) * 0.5, z, heading: (rng() - 0.5) * 2.4 + (rng() < 0.25 ? Math.PI : 0), // mostly upstream
             speed: 0.3 + rng() * 0.35, ph: rng() * 6.28, size: 0.8 + rng() * 0.5 };
     });
     const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -748,22 +781,21 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement) {
     const swim = new THREE.Quaternion();
     // Heading 0 is upstream (-z). Each fish drifts left and right on its own slow rhythm, and near a bank
     // turns back towards the middle of the stream, so they wander rather than march in step.
-    function placeKoi(t: number, dt: number) {
+    function placeKoi(t: number, dt: number, wrap: (z: number) => number) {
         if (!school) return;
         koi.forEach((k, i) => {
-            const [cx, w] = river(k.z), across = (k.x - cx) / w;
+            const w = river(k.z)[1];
             k.heading += (0.5 * Math.sin(t * 0.35 + k.ph) + 0.3 * Math.sin(t * 0.83 + k.ph * 2.3)) * dt;
-            if (Math.abs(across) > 0.45) { // steer back towards the middle, keeping up- or downstream
+            if (Math.abs(k.a) > 0.45) { // steer back towards the middle, keeping up- or downstream
                 const ahead = Math.cos(k.heading) >= 0 ? -2 : 2;
-                k.heading += wrapAngle(Math.atan2(k.x - cx, -ahead) - k.heading) * Math.min(1, (Math.abs(across) - 0.45) * 6) * dt * 1.5;
+                k.heading += wrapAngle(Math.atan2(k.a * w, -ahead) - k.heading) * Math.min(1, (Math.abs(k.a) - 0.45) * 6) * dt * 1.5;
             }
             const speed = k.speed * (0.75 + 0.25 * Math.sin(t * 0.5 + k.ph)); // easing off and picking up
-            k.x -= Math.sin(k.heading) * speed * dt;
-            k.z -= Math.cos(k.heading) * speed * dt;
-            if (k.z < -30) k.z += 40; // round again from just behind the camera, or the other way
-            if (k.z > 10) k.z -= 40;
+            k.a -= (Math.sin(k.heading) * speed * dt) / w;
+            k.z = wrap(k.z - Math.cos(k.heading) * speed * dt); // round again from the other end of the window
+            const [cx, w2] = river(k.z);
             swim.setFromAxisAngle(Y, k.heading);
-            school!.setMatrixAt(i, m4.compose(at.set(k.x, -0.12, k.z), swim, sc.setScalar(k.size)));
+            school!.setMatrixAt(i, m4.compose(at.set(cx + k.a * w2, -0.12, k.z), swim, sc.setScalar(k.size * Math.min(1, w2 / 2.8))));
         });
         school.instanceMatrix.needsUpdate = true;
     }
@@ -787,6 +819,9 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement) {
     const up = new THREE.Vector3(0, 1, 0), normal = new THREE.Vector3(), tilt = new THREE.Quaternion(), yaw = new THREE.Quaternion();
 
     // ---- colours: AquaPlot's teal water on this site's white (or near-black) page
+    const fog = new THREE.Fog("#d9e0da", 8, 30);
+    world.fog = fog;
+    let night = false;
     function setDark(dark: boolean) {
         const bg = new THREE.Color(dark ? "#0a0a0a" : "#d9e0da"); // mist
         const accent = new THREE.Color(dark ? "#3f9c8e" : "#1d6b62"); // jade
@@ -807,41 +842,145 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement) {
             set("uRock", c("#858175")); u.uReflect.value = 0.35;
         }
         set("uFog", bg);
-        world.fog = new THREE.Fog(bg, 8, 30);
+        fog.color.copy(bg);
         u.uNight.value = dark ? 1 : 0;
-        for (const [mat, night] of dimmed) mat.color.setScalar(dark ? night : 1);
+        for (const [mat, k] of dimmed) mat.color.setScalar(dark ? k : 1);
         lampMat.color.set(dark ? "#ffc27a" : "#e9dcc0");
-        glowMat.opacity = dark ? 1 : 0;
+        night = dark; // the lanterns' glow (draw)
         renderer.setClearColor(bg);
         if (!running) draw(0);
     }
 
-    // ---- the camera: low down, looking up the stream, leaning a little towards the pointer
+    // ---- reading the page: where the posts leave room for the river (AquaPlot's measure())
+    let wpp = 0.024, topH = 30, win = [-30, 48], pathTex: THREE.DataTexture | null = null;
+    type Chan = { top: number; bottom: number; c: number; h: number };
+    // The river's centre: alongside a row, the middle of the channel its posts leave free; between two rows,
+    // a smooth bend from one channel to the next, begun a little before the first row ends and finished a
+    // little after the next begins.
+    function centreAt(chans: Chan[], y: number) {
+        for (let k = 0; k + 1 < chans.length; k++) {
+            const a = chans[k], b = chans[k + 1];
+            // long enough to bend gently, never so long it runs into the next bend on a short row
+            const reach = Math.max(16, Math.min(Math.max((b.top - a.bottom) * 1.6, Math.abs(b.c - a.c) * 1.5),
+                (a.bottom - a.top) / 2, (b.bottom - b.top) / 2));
+            const from = a.bottom - reach, to = b.top + reach;
+            if (y < from) break;
+            if (y > to) continue;
+            return mix(a.c, b.c, ease(clamp01((y - from) / (to - from))));
+        }
+        return (chans.find((q) => y <= q.bottom) || chans[chans.length - 1]).c;
+    }
+    function measure() {
+        const W = host.clientWidth, H = host.clientHeight;
+        if (!W || !H) return;
+        const chans = [...flow.querySelectorAll(".ch")].map((el) => {
+            const r = el.getBoundingClientRect();
+            return { top: r.top + scrollY, bottom: r.bottom + scrollY, c: (r.left + r.right) / 2, h: r.width / 2 };
+        }).filter((q) => q.bottom > q.top && q.h > 4);
+        // From above, 5.6 world units either side of the middle fill a typical channel; everything else, rocks
+        // and koi included, is sized in world units, so this sets the scale of the whole scene.
+        const typical = chans.length ? chans.map((q) => q.h * 2).sort((a, b) => a - b)[chans.length >> 1] : W * 0.3;
+        const across = Math.min(34, Math.max(14, (2 * 5.6 * W) / typical));
+        wpp = across / W;
+        topH = across / (2 * Math.tan(THREE.MathUtils.degToRad(TOP_FOV / 2)) * (W / H));
+        const reach = (across * H) / W / 2; // world visible above and below the middle of the screen
+        win = [-Math.max(30, reach + 6), Math.max(30, reach + 6) + Math.max(18, reach + 6)];
+        uniforms.uWin.value.set(win[0], win[1]);
+        uniforms.uEdge.value.set(Math.max(38, reach + 5), Math.max(48, reach + 12));
+        if (!chans.length) { path = null; return; }
+
+        // Page y to world z: the middle of the screen, once the first screen has scrolled away, is z = 0.
+        const zOf = (y: number) => (y - hero.offsetHeight - H / 2) * wpp;
+        const y0 = chans[0].top - H, y1 = chans[chans.length - 1].bottom + H;
+        const n = Math.min(4096, Math.max(2, Math.ceil((y1 - y0) / 4))), step = (y1 - y0) / n;
+        // First the centre line, then one width for the whole river: as wide as its tightest place beside the
+        // posts allows. A river that narrows and swells round every bend looks pinched.
+        const xs = new Float32Array(n), ws = new Float32Array(n), data = new Uint16Array(n * 2);
+        let room = Infinity;
+        for (let i = 0; i < n; i++) {
+            const y = y0 + (i + 0.5) * step, c = centreAt(chans, y);
+            xs[i] = (c - W / 2) * wpp;
+            for (const q of chans) if (y >= q.top && y <= q.bottom) room = Math.min(room, c - (q.c - q.h), q.c + q.h - c);
+        }
+        const width = Math.max(0.35, ((Math.min(room, typical / 2) - 8) * wpp) / 1.72); // banks gone 8px before the posts
+        ws.fill(width);
+        for (let i = 0; i < n; i++) {
+            data[i * 2] = THREE.DataUtils.toHalfFloat(xs[i]);
+            data[i * 2 + 1] = THREE.DataUtils.toHalfFloat(width);
+        }
+        pathTex?.dispose();
+        pathTex = new THREE.DataTexture(data, n, 1, THREE.RGFormat, THREE.HalfFloatType);
+        pathTex.magFilter = pathTex.minFilter = THREE.LinearFilter;
+        pathTex.needsUpdate = true;
+        path = { n, xs, ws, z0: zOf(y0), dz: step * wpp };
+        uniforms.uPath.value = pathTex;
+        uniforms.uPathRange.value.set(path.z0, 1 / (n * path.dz));
+    }
+
+    // ---- the camera: low down looking up the stream behind About me, leaning a little towards the pointer;
+    // rising as you scroll to look straight down on the river beside the posts
     const lean = { x: 0, y: 0, tx: 0, ty: 0 };
     const onPointer = (e: PointerEvent) => {
         lean.tx = (e.clientX / innerWidth - 0.5) * 1.4;
         lean.ty = (e.clientY / innerHeight - 0.5) * 0.5;
     };
     addEventListener("pointermove", onPointer, { passive: true });
-    const aim = new THREE.Vector3();
+    const aim = new THREE.Vector3(), eye0 = new THREE.Vector3(), eye1 = new THREE.Vector3(), NORTH = new THREE.Vector3(0, 0, -1);
+    const q0 = new THREE.Quaternion(), q1 = new THREE.Quaternion();
+    const snap = (z: number, step: number) => Math.round(z / step) * step;
 
-    let t = 8, last = performance.now(), running = false, frame = 0;
+    let t = 8, last = performance.now(), running = false, frame = 0, eased = scrollY;
     const still = matchMedia("(prefers-reduced-motion: reduce)");
     function draw(dt: number) {
         t += dt;
+        eased = still.matches ? scrollY : eased + (scrollY - eased) * (1 - Math.exp(-dt * 8));
+        const heroH = Math.max(hero.offsetHeight, 1);
+        const p = clamp01(eased / heroH), e = ease(p), banks = ease(clamp01((p - 0.15) / 0.65)), gone = ease(clamp01((p - 0.05) / 0.5));
+        pathMix = path ? ease(clamp01((p - 0.15) / 0.7)) : 0;
+        // locked to the page, not eased: the bends have to stay beside the posts they go round
+        const zc = Math.max(0, scrollY - heroH) * wpp;
+        const tall = camera.aspect < 1, heroFov = tall ? 55 : 44; // tall screens look further down, so the stream fills them
         lean.x += (lean.tx - lean.x) * Math.min(1, dt * 2.5);
         lean.y += (lean.ty - lean.y) * Math.min(1, dt * 2.5);
-        const tall = camera.aspect < 1; // tall screens look further down, so the stream fills them
-        camera.position.set(lean.x, 2.1 - lean.y, 6.5);
-        camera.lookAt(aim.set(lean.x * 0.4, tall ? -2.6 : -1.3, -4));
-        camera.fov = tall ? 55 : 44;
-        camera.updateProjectionMatrix();
-        uniforms.uTime.value = t;
 
-        placeKoi(t, dt);
-        for (const leaf of leaves) { // drift downstream, wrapping round the stretch of world near the camera
+        eye0.set(lean.x, 2.1 - lean.y, zc + 6.5);
+        q0.setFromRotationMatrix(m4.lookAt(eye0, aim.set(lean.x * 0.4, tall ? -2.6 : -1.3, zc - 4), up));
+        eye1.set(0, topH, zc);
+        q1.setFromRotationMatrix(m4.lookAt(eye1, aim.set(0, 0, zc), NORTH));
+        camera.position.lerpVectors(eye0, eye1, e);
+        camera.quaternion.slerpQuaternions(q0, q1, e);
+        camera.fov = mix(heroFov, TOP_FOV, e);
+        camera.updateProjectionMatrix();
+
+        const u = uniforms;
+        u.uTime.value = t; u.uAnchor.value = zc; u.uPathMix.value = pathMix;
+        u.uFogNear.value = mix(8, topH * 2.5, e); u.uFogFar.value = mix(26, topH * 5, e);
+        fog.near = mix(8, topH * 2.5, e); fog.far = mix(30, topH * 5, e);
+        u.uBank.value.set(mix(3.5, 1.32, banks), mix(9, 1.72, banks));
+        // From above the banks have faded to the page's colour a few units out, and the clear colour is that
+        // colour too: no need to shade the land beyond them.
+        u.uSpread.value = Math.min(1, (u.uBank.value.y * Math.max(3.2, path ? path.ws[0] : 0) * 1.15) / 30);
+        u.uPointK.value = mix(7, topH * 0.3, e);
+        terrain.position.z = snap(zc, LEN / groundSeg[1]);
+        water.position.z = snap(zc, LEN / waterSeg[1]);
+        decor.visible = gone < 1;
+        for (const m of decorMats) m.opacity = 1 - gone;
+        glowMat.opacity = night ? 1 - gone : 0;
+
+        // Rocks, koi and leaves live in a window round the camera, and scale with the river they sit in.
+        const lo = zc + win[0], wrap = (z: number) => lo + ((((z - lo) % win[1]) + win[1]) % win[1]);
+        rocks.forEach((rock, i) => {
+            const d = rock.userData;
+            d.z = wrap(d.z);
+            const [cx, w] = river(d.z), k = Math.min(1.1, w / 3), x = cx + d.off * w;
+            rock.scale.set(d.size[0] * k, d.size[1] * k, d.size[2] * k);
+            rock.position.set(x, d.yc * k, d.z);
+            u.uRocks.value[i].set(x, d.z, d.r * k, d.strength);
+        });
+        placeKoi(t, dt, wrap);
+        for (const leaf of leaves) { // drift downstream
             const d = leaf.userData;
-            d.z = -30 + ((((d.z + d.speed * dt) + 30) % 48) + 48) % 48;
+            d.z = wrap(d.z + d.speed * dt);
             d.yaw += d.spin * dt;
             const [cx, w] = river(d.z), x = cx + d.off * w;
             const [h, dx, dz] = wavesAt(x, d.z, t);
@@ -866,14 +1005,24 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement) {
         if (!go) { running = false; cancelAnimationFrame(frame); }
         if (still.matches) draw(0);
     }
+    let pending = false;
+    const onScroll = () => { // with motion reduced, a still frame for each scroll position
+        if (running || pending) return;
+        pending = true;
+        requestAnimationFrame(() => { pending = false; draw(0); });
+    };
+    addEventListener("scroll", onScroll, { passive: true });
+    const relayout = () => { measure(); if (!running) draw(0); };
     const resize = new ResizeObserver(() => {
         const w = host.clientWidth, h = host.clientHeight;
         if (!w || !h) return;
         renderer.setSize(w, h, false);
         camera.aspect = w / h;
-        if (!running) draw(0);
+        relayout();
     });
     resize.observe(host);
+    const reflow = new ResizeObserver(relayout); // cover images loading, posts added or removed, fonts
+    reflow.observe(flow);
     document.addEventListener("visibilitychange", update);
     still.addEventListener("change", update);
 
@@ -885,7 +1034,9 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement) {
             disposed = true;
             cancelAnimationFrame(frame);
             resize.disconnect();
+            reflow.disconnect();
             removeEventListener("pointermove", onPointer);
+            removeEventListener("scroll", onScroll);
             document.removeEventListener("visibilitychange", update);
             still.removeEventListener("change", update);
             world.traverse((o) => {
@@ -894,11 +1045,31 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement) {
                     (o.material as THREE.Material).dispose();
                 }
             });
+            pathTex?.dispose();
+            blankPath.dispose();
             renderer.dispose();
         },
     };
 }
 
+// About me fades and lifts away as you scroll off the first screen (--hero-p, 0..1; app/blogs/timeline.css).
+// Separate from the scene, so it works without WebGL.
+function fadeHero(hero: HTMLElement) {
+    let queued = false;
+    const onScroll = () => {
+        if (queued) return;
+        queued = true;
+        requestAnimationFrame(() => {
+            queued = false;
+            hero.style.setProperty("--hero-p", clamp01(scrollY / Math.max(hero.offsetHeight, 1)).toFixed(4));
+        });
+    };
+    addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => removeEventListener("scroll", onScroll);
+}
+
+// Expects #river-hero and #river-flow on the page (app/blogs/page.tsx).
 export default function RiverBackground() {
     const host = useRef<HTMLDivElement>(null);
     const canvas = useRef<HTMLCanvasElement>(null);
@@ -906,10 +1077,12 @@ export default function RiverBackground() {
     const dark = useDarkMode();
 
     useEffect(() => {
-        const s = start(canvas.current!, host.current!);
+        const hero = document.getElementById("river-hero")!, flow = document.getElementById("river-flow")!;
+        const unfade = fadeHero(hero);
+        const s = start(canvas.current!, host.current!, hero, flow);
         scene.current = s;
         s?.start();
-        return () => { s?.stop(); scene.current = null; };
+        return () => { unfade(); s?.stop(); scene.current = null; };
     }, []);
     useEffect(() => scene.current?.setDark(dark), [dark]);
 
@@ -919,7 +1092,7 @@ export default function RiverBackground() {
             bg-[radial-gradient(120%_80%_at_50%_62%,#a9c7bf_0%,#d9e0da_75%)] dark:bg-[radial-gradient(120%_80%_at_50%_62%,#1a3a40_0%,#0a0a0a_75%)]">
             <canvas ref={canvas} className="absolute inset-0 h-full w-full opacity-0 transition-opacity duration-[1400ms]" />
         </div>
-        <p className="fixed bottom-4 right-4 text-[0.75rem] text-white/80 [text-shadow:0_1px_3px_rgb(0_0_0/0.5)]">
+        <p className="px-4 pb-4 text-right text-[0.75rem] text-zinc-600 dark:text-zinc-400">
             &ldquo;IkanKoi3D_032&rdquo; <a href="https://sketchfab.com/3d-models/ikankoi3d-032-721a743e2a7d49eaa59e07a67a23a7e8" target="_blank">(koi)</a> by nurulaini is licensed under Creative Commons Attribution <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank">(CC BY 4.0)</a>
         </p>
     </>);

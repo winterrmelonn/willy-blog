@@ -19,7 +19,7 @@ const serif = Instrument_Serif({ weight: "400", subsets: ["latin"] });
 const LINKS = [
     { href: "/blogs", label: "Read the blog" },
     { href: "/calendar", label: "Calendar" },
-    { href: "/about", label: "About me" },
+    { href: "/projects", label: "Projects" },
 ];
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);

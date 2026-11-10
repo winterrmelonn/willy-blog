@@ -20,7 +20,6 @@ async function Nav() {
         {admin && <Link href="/post" className={box}>Post</Link>}
         {admin && <Link href="/wardrobe" className={box}>Wardrobe</Link>}
         <Link href="/calendar" className={box}>Calendar</Link>
-        <Link href="/about" className={box}>About</Link>
         <Link href="/profile" className={box}>Profile</Link>
       </nav>
     </header>
