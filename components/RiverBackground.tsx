@@ -27,6 +27,7 @@ const TOP_FOV = 30; // the camera's field of view looking straight down
 const HAZE = [14, 50], LIT_HAZE = [14, 58], EDGE = [58, 68], WIN = [-55, 75];
 const BRIDGE_Z = -0.5; // where the red bridge crosses, just ahead of the camera
 const f = (v: number) => v.toFixed(5);
+const X_AXIS = new THREE.Vector3(1, 0, 0), Y_UP = new THREE.Vector3(0, 1, 0), Z_AXIS = new THREE.Vector3(0, 0, 1);
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v)), ease = (v: number) => v * v * (3 - 2 * v);
 const mix = (a: number, b: number, k: number) => a + (b - a) * k;
 
@@ -474,14 +475,49 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
     });
 
     // Solid shapes in one colour each, merged into one mesh per object (vertex colours, no textures)
-    const painted = (g: THREE.BufferGeometry, hex: string) => {
+    // Solid shapes in one colour each (vertex colours, no textures). Timber passes `wood`: the direction its grain
+    // runs and how strongly it shows, stored per vertex as [along the grain, across it, strength] for woodify().
+    const painted = (g: THREE.BufferGeometry, hex: string, wood?: { axis: THREE.Vector3; amount: number }) => {
         const out = g.index ? g.toNonIndexed() : g;
         out.deleteAttribute("uv");
-        const c = new THREE.Color(hex), n = out.attributes.position.count, col = new Float32Array(n * 3);
+        const c = new THREE.Color(hex), pos = out.attributes.position, n = pos.count, col = new Float32Array(n * 3);
         for (let i = 0; i < n; i++) col.set([c.r, c.g, c.b], i * 3);
         out.setAttribute("color", new THREE.BufferAttribute(col, 3));
         out.setAttribute("flutter", new THREE.BufferAttribute(new Float32Array(n), 1)); // still (leaves set 1: see clump)
+        const grain = new Float32Array(n * 3);
+        if (wood) {
+            const ax = wood.axis.clone().normalize(), a = new THREE.Vector3(), b = new THREE.Vector3(), p = new THREE.Vector3();
+            a.crossVectors(ax, Math.abs(ax.y) < 0.9 ? Y_UP : X_AXIS).normalize();
+            b.crossVectors(ax, a);
+            for (let i = 0; i < n; i++) { // "across" runs over every face of a beam, whichever way it faces
+                p.fromBufferAttribute(pos, i);
+                grain.set([p.dot(ax), p.dot(a) + p.dot(b), wood.amount], i * 3);
+            }
+        }
+        out.setAttribute("aWood", new THREE.BufferAttribute(grain, 3));
         return out;
+    };
+    // Wood grain on a material's timber (see painted): long fibres along the grain, boards a shade apart, weathered
+    // patches. Paint-lacquered timber passes a lower strength than bare planks.
+    const woodify = (mat: THREE.MeshLambertMaterial) => {
+        mat.onBeforeCompile = (shader) => {
+            shader.vertexShader = "attribute vec3 aWood;\nvarying vec3 vWood;\n" + shader.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\nvWood = aWood;");
+            shader.fragmentShader = `varying vec3 vWood;
+              float wHash(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
+              float wNoise(vec2 p) {
+                vec2 i = floor(p), f = fract(p), u = f * f * (3.0 - 2.0 * f);
+                return mix(mix(wHash(i), wHash(i + vec2(1.0, 0.0)), u.x), mix(wHash(i + vec2(0.0, 1.0)), wHash(i + vec2(1.0, 1.0)), u.x), u.y);
+              }
+              ` + shader.fragmentShader.replace("#include <color_fragment>", `#include <color_fragment>
+              if (vWood.z > 0.0) {
+                float a = vWood.x, c = vWood.y;
+                float fibre = wNoise(vec2(a * 0.9, c * 40.0)) * 0.6 + wNoise(vec2(a * 3.0, c * 110.0)) * 0.4;
+                float board = wHash(vec2(floor(c * 3.0), 7.0));
+                float wear = wNoise(vec2(a * 2.2, c * 2.2));
+                float wood = (0.7 + 0.55 * fibre) * (0.9 + 0.2 * board) * (0.86 + 0.24 * wear);
+                diffuseColor.rgb *= mix(1.0, wood, vWood.z);
+              }`);
+        };
     };
     // A clump of leaves, like the home page's trees rather than a solid lump: a small dim core, so it reads as
     // dense, inside a cloud of pointed leaf cards at every angle, so its edge breaks up and light gets through.
@@ -514,6 +550,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         g.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
         g.setAttribute("color", new THREE.BufferAttribute(col, 3));
         g.setAttribute("flutter", new THREE.BufferAttribute(new Float32Array(n).fill(1), 1));
+        g.setAttribute("aWood", new THREE.BufferAttribute(new Float32Array(n * 3), 3));
         return [core, g];
     }
     // The low view's scenery (trees, lanterns, bridge, pavilion), faded out as the camera rises (draw).
@@ -829,14 +866,17 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         const deckY = (x: number) => BANK + RISE * (1 - (2 * x / SPAN) ** 2) - 0.05;
         const parts: THREE.BufferGeometry[] = [];
         // a box from (x0,y0) to (x1,y1) along the arch, w deep and t thick, its top at those points
-        const along = (x0: number, x1: number, y0: number, y1: number, t: number, w: number, z: number, color: string) => {
+        // timber: lacquered, the grain along the beam unless given (the planks' runs across the deck)
+        const along = (x0: number, x1: number, y0: number, y1: number, t: number, w: number, z: number, color: string,
+            wood = { axis: new THREE.Vector3(x1 - x0, y1 - y0, 0), amount: 0.55 }) => {
             const len = Math.hypot(x1 - x0, y1 - y0);
             return painted(new THREE.BoxGeometry(len, t, w).translate(0, -t / 2, 0).rotateZ(Math.atan2(y1 - y0, x1 - x0))
-                .translate((x0 + x1) / 2, (y0 + y1) / 2, z), color);
+                .translate((x0 + x1) / 2, (y0 + y1) / 2, z), color, wood);
         };
+        const upright = { axis: Y_UP, amount: 0.55 }, crosswise = { axis: Z_AXIS, amount: 0.55 };
         for (let i = 0; i < SEGS; i++) {
             const x0 = -SPAN / 2 + (i / SEGS) * SPAN, x1 = x0 + SPAN / SEGS;
-            parts.push(along(x0, x1, deckY(x0), deckY(x1), 0.06, WIDE * 2, 0, PLANK)); // planks
+            parts.push(along(x0, x1, deckY(x0), deckY(x1), 0.06, WIDE * 2, 0, PLANK, { axis: Z_AXIS, amount: 1 })); // bare planks
             parts.push(along(x0, x1, deckY(x0) - 0.06, deckY(x1) - 0.06, 0.1, 0.06, WIDE, VERMILION), // side beams
                 along(x0, x1, deckY(x0) - 0.06, deckY(x1) - 0.06, 0.1, 0.06, -WIDE, VERMILION));
             for (const z of [WIDE, -WIDE]) { // top rail and a lower rail
@@ -847,7 +887,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         for (let i = 0; i <= SEGS; i += 4) { // railing posts, with caps on the four end posts
             const x = -SPAN / 2 + (i / SEGS) * SPAN, y = deckY(x), end = i === 0 || i === SEGS;
             for (const z of [WIDE, -WIDE]) {
-                parts.push(painted(new THREE.BoxGeometry(0.07, 0.42, 0.07).translate(x, y + 0.19, z), VERMILION));
+                parts.push(painted(new THREE.BoxGeometry(0.07, 0.42, 0.07).translate(x, y + 0.19, z), VERMILION, upright));
                 if (end) {
                     parts.push(painted(new THREE.SphereGeometry(0.055, 10, 8).scale(1, 1.15, 1).translate(x, y + 0.46, z), BRONZE),
                         painted(new THREE.ConeGeometry(0.03, 0.08, 8).translate(x, y + 0.55, z), BRONZE));
@@ -856,11 +896,12 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         }
         for (const x of [-2.9, -1.2, 1.2, 2.9]) { // piers standing in the stream, braced across
             const top = deckY(x) - 0.12;
-            for (const z of [WIDE - 0.08, -WIDE + 0.08]) parts.push(painted(new THREE.CylinderGeometry(0.06, 0.07, top + 1.2, 8).translate(x, (top - 1.2) / 2, z), VERMILION));
-            parts.push(painted(new THREE.BoxGeometry(0.08, 0.08, WIDE * 2).translate(x, top - 0.05, 0), VERMILION),
-                painted(new THREE.BoxGeometry(0.06, 0.06, WIDE * 2).translate(x, Math.min(0.1, top - 0.4), 0), VERMILION));
+            for (const z of [WIDE - 0.08, -WIDE + 0.08]) parts.push(painted(new THREE.CylinderGeometry(0.06, 0.07, top + 1.2, 8).translate(x, (top - 1.2) / 2, z), VERMILION, upright));
+            parts.push(painted(new THREE.BoxGeometry(0.08, 0.08, WIDE * 2).translate(x, top - 0.05, 0), VERMILION, crosswise),
+                painted(new THREE.BoxGeometry(0.06, 0.06, WIDE * 2).translate(x, Math.min(0.1, top - 0.4), 0), VERMILION, crosswise));
         }
         const mat = solid();
+        woodify(mat);
         dimmed.push([mat, 0.35]);
         const bridge = new THREE.Mesh(mergeGeometries(parts)!, mat);
         const [cx] = river(BRIDGE_Z);
@@ -877,14 +918,15 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         painted(new THREE.CylinderGeometry(1.2, 1.3, 0.5, 6).translate(0, -0.05, 0), "#8a857c"),
         ...Array.from({ length: 6 }, (_, i) => {
             const a = (i / 6) * Math.PI * 2;
-            return painted(new THREE.CylinderGeometry(0.06, 0.06, 1.45, 8).translate(Math.cos(a) * 0.9, 0.92, Math.sin(a) * 0.9), RED);
+            return painted(new THREE.CylinderGeometry(0.06, 0.06, 1.45, 8).translate(Math.cos(a) * 0.9, 0.92, Math.sin(a) * 0.9), RED, { axis: Y_UP, amount: 0.55 });
         }),
-        painted(new THREE.CylinderGeometry(0.98, 0.98, 0.14, 6).translate(0, 1.6, 0), RED),
-        painted(new THREE.CylinderGeometry(0.95, 0.95, 0.06, 6, 1, true).translate(0, 0.45, 0), RED), // low railing
+        painted(new THREE.CylinderGeometry(0.98, 0.98, 0.14, 6).translate(0, 1.6, 0), RED, { axis: X_AXIS, amount: 0.45 }),
+        painted(new THREE.CylinderGeometry(0.95, 0.95, 0.06, 6, 1, true).translate(0, 0.45, 0), RED, { axis: X_AXIS, amount: 0.45 }), // low railing
         painted(new THREE.LatheGeometry(roofCurve, 6).translate(0, 1.55, 0), ROOF),
         painted(new THREE.ConeGeometry(0.07, 0.4, 6).translate(0, 2.9, 0), ROOF),
         painted(new THREE.SphereGeometry(0.08, 8, 6).translate(0, 2.72, 0), ROOF),
     ])!, solid());
+    woodify(pavilion.material as THREE.MeshLambertMaterial);
     dimmed.push([pavilion.material as THREE.MeshLambertMaterial, 0.3]);
     {
         pavilion.position.set(PAV_X, 0.42, PAV_Z);
