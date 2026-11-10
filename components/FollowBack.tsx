@@ -3,7 +3,6 @@
 import { useRef, useState, type DragEvent } from "react";
 import { compare, kindOf, parseExport, type Entry, type Result, type Snapshot } from "@/lib/followback";
 import { saveSnapshot } from "@/app/followback/actions";
-import { setDarkMode, useDarkMode } from "./darkmode";
 
 const TABS = {
     notBack: ["Don't follow you back", "You follow them, they don't follow you. Date is when you followed them."],
@@ -33,7 +32,6 @@ export default function FollowBack({ initialSnapshot }: { initialSnapshot: Snaps
     const [over, setOver] = useState(false);
     const [copied, setCopied] = useState("");
     const input = useRef<HTMLInputElement>(null);
-    const dark = useDarkMode();
 
     async function load(list: FileList | null) {
         const followers = new Map<string, number>(), following = new Map<string, number>();
@@ -88,16 +86,11 @@ export default function FollowBack({ initialSnapshot }: { initialSnapshot: Snaps
 
     return (
         <div className="flex flex-col gap-6">
-            <div className="mt-10 flex flex-wrap items-start justify-between gap-4">
-                <div className="min-w-0">
-                    <h1 className="text-3xl font-semibold uppercase tracking-wide text-balance">Who doesn&apos;t follow back</h1>
-                    <p className="mt-2 max-w-prose text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-                        Your Instagram export is read in this browser. Only your follower usernames are saved, so the next export can show who unfollowed you.
-                    </p>
-                </div>
-                <button type="button" className={pill} onClick={() => setDarkMode(!dark)} aria-label={`Switch to ${dark ? "light" : "dark"} mode`}>
-                    {dark ? "Light" : "Dark"}
-                </button>
+            <div className="mt-10">
+                <h1 className="text-3xl font-semibold uppercase tracking-wide text-balance">Who doesn&apos;t follow back</h1>
+                <p className="mt-2 max-w-prose text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+                    Your Instagram export is read in this browser. Only your follower usernames are saved, so the next export can show who unfollowed you.
+                </p>
             </div>
 
             <section
