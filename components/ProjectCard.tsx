@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { saveProject, type ProjectType } from "@/app/projects/actions";
 import ImagePicker from "./ImagePicker";
+import { discardImage } from "@/app/images/actions";
 import Cover from "./Cover";
 
 const field = "w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-transparent px-3 py-2";
@@ -78,7 +79,7 @@ export default function ProjectCard({ project, admin }: { project: ProjectType; 
                 <button type="button" disabled={saving} onClick={save} className={`bg-black dark:bg-white text-white dark:text-black ${pill}`}>
                     {saving ? "Saving..." : "Save"}
                 </button>
-                <button type="button" disabled={saving} onClick={() => setEditing(false)} className={`border border-zinc-200 dark:border-zinc-800 ${pill}`}>
+                <button type="button" disabled={saving} onClick={() => { if (draft.image && draft.image !== project.image) discardImage(draft.image).catch(() => {}); setEditing(false); }} className={`border border-zinc-200 dark:border-zinc-800 ${pill}`}>
                     Cancel
                 </button>
                 <button type="button" onClick={() => setDraft({ ...draft, links: [...draft.links, { label: "", href: "" }] })}

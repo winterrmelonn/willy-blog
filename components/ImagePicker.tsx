@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { uploadImage } from "@/app/images/actions";
+import { uploadImage, discardImage } from "@/app/images/actions";
 
 // Shrink a picked photo in the browser (at most 1600px wide, WebP or JPEG, under ~900KB), upload it, and
 // return its id. Server actions accept up to 1MB, and big photos would make pages slow anyway.
@@ -26,7 +26,8 @@ export async function shrinkAndUpload(file: File) {
 
 const pill = "rounded-full px-4 py-1.5 text-sm border border-zinc-200 dark:border-zinc-800 hover:opacity-80 disabled:opacity-50";
 
-// Add / change / remove a cover image while editing. `value` is the image id.
+// Add / change / remove a cover image while editing. `value` is the image id. A replaced or removed image is
+// deleted unless something saved still uses it (then saving cleans it up instead).
 export default function ImagePicker({ value, onChange }: { value?: string; onChange: (id: string | undefined) => void }) {
     const input = useRef<HTMLInputElement>(null);
     const [busy, setBusy] = useState(false);
@@ -38,6 +39,7 @@ export default function ImagePicker({ value, onChange }: { value?: string; onCha
         setError("");
         try {
             onChange(await shrinkAndUpload(file));
+            if (value) discardImage(value).catch(() => {});
         } catch {
             setError("Couldn't upload that image.");
         }
@@ -56,7 +58,7 @@ export default function ImagePicker({ value, onChange }: { value?: string; onCha
                 <button type="button" disabled={busy} className={pill} onClick={() => input.current?.click()}>
                     {busy ? "Uploading..." : value ? "Change image" : "Add image"}
                 </button>
-                {value && !busy && <button type="button" className={pill} onClick={() => onChange(undefined)}>Remove image</button>}
+                {value && !busy && <button type="button" className={pill} onClick={() => { onChange(undefined); discardImage(value).catch(() => {}); }}>Remove image</button>}
                 {error && <span className="text-sm text-red-600 dark:text-red-400">{error}</span>}
             </div>
         </div>

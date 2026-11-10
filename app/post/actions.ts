@@ -5,7 +5,7 @@ import dbConnect from "@/lib/mongoose";
 import { initAuth, ADMIN_EMAILS } from "@/lib/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { isImageId } from "@/lib/ImageModel";
+import { isImageId, deleteUnusedImage } from "@/lib/ImageModel";
 
 export interface PostType {
     id: string;
@@ -43,7 +43,8 @@ export async function setPostImage(id: string, image: string | undefined) {
     if (!session || !ADMIN_EMAILS.includes(session.user.email)) throw new Error("Unauthorized");
     if (image !== undefined && !isImageId(image)) throw new Error("Bad image");
     await dbConnect();
-    await Post.updateOne({ id: String(id) }, image ? { image } : { $unset: { image: 1 } });
+    const old = await Post.findOneAndUpdate({ id: String(id) }, image ? { image } : { $unset: { image: 1 } });
+    if (old?.image !== image) await deleteUnusedImage(old?.image);
     revalidatePath("/blogs");
     revalidatePath(`/blogs/${id}`);
 }
@@ -55,6 +56,7 @@ export async function deletePost(id: string) {
         throw new Error("Unauthorized");
     }
     await dbConnect();
-    await Post.deleteOne({ id });
+    const old = await Post.findOneAndDelete({ id });
+    await deleteUnusedImage(old?.image);
     revalidatePath("/blogs");
 }
