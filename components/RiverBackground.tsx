@@ -68,6 +68,9 @@ const COMMON = `
 // match the ground they grow from: the two greens, sunny yellow-green and cool blue-green drifts, darker clumps.
 const MEADOW = `
     uniform vec3 uGrassA, uGrassB, uGrassC, uGrassD;
+    float crag(vec2 p, float h) {  // where bare rock breaks through the banks (low down, near the water)
+      return smoothstep(0.48, 0.66, fbm(p * 0.33 + 7.0)) * (1.0 - smoothstep(0.35, 0.6, h));
+    }
     vec3 meadow(vec2 p) {
       vec3 g = mix(uGrassA, uGrassB, fbm(p * 0.8));
       g = mix(g, uGrassC, smoothstep(0.42, 0.68, fbm(p * 0.45 + 5.3)));
@@ -206,15 +209,19 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
           return;
         }
         float depth = max(-h, 0.0);
-        // Pebbles on the bed and along the waterline, wobbled by the moving surface above them.
+        // Stone on the bed, along the waterline and in outcrops up the banks: pebbles over big slabs split by dark
+        // cracks, streaked like ink texture strokes, wobbled under water by the moving surface above them.
         vec3 stone = uBedA; float pebble = 0.0;
-        if (h < 0.25) {
+        if (h < 0.6) {
           vec2 q = p + vec2(sin(p.y * 1.7 + uTime * 1.3), cos(p.x * 1.9 + uTime * 1.1)) * 0.035 * smoothstep(0.0, 0.3, depth);
           vec3 v = voronoi(q * 3.2);
           pebble = smoothstep(0.02, 0.16, v.y - v.x);
           stone = mix(uBedA, uBedB, v.z) * (0.8 + 0.28 * (1.0 - smoothstep(0.0, 0.8, v.x)));
           vec3 v2 = voronoi(q * 9.0 + 3.7);  // small grit between the pebbles
           stone *= mix(0.84, 1.04, smoothstep(0.02, 0.1, v2.y - v2.x)) * (0.9 + 0.2 * vnoise(q * 11.0));
+          vec3 big = voronoi(q * 0.8 + 11.0);
+          stone *= mix(0.5, 1.0, smoothstep(0.02, 0.1, big.y - big.x)) * (0.82 + 0.36 * big.z);
+          stone *= 0.86 + 0.24 * vnoise(vec2(q.x * 8.0, q.y * 1.6));
           stone = mix(stone, uGrassA * 0.8, smoothstep(0.55, 0.8, fbm(q * 1.3)) * 0.35);  // patches of algae
         }
         vec3 bed = vec3(0.0), bank = vec3(0.0);
@@ -227,6 +234,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
           float g = fbm(p * 0.8);
           vec3 grass = meadow(p) * (0.82 + 0.22 * vnoise(p * 7.0) + 0.14 * vnoise(vec2(p.x * 40.0, p.y * 9.0)));
           bank = mix(mix(uEarth, stone, pebble * 0.7), grass, smoothstep(0.1, 0.32, h + (g - 0.5) * 0.3));
+          bank = mix(bank, stone, crag(p, h));  // bare rock
           bank *= mix(0.7, 1.0, smoothstep(0.0, 0.16, h));
           bank *= 0.66 + 0.44 * max(dot(normalize(vN), uLight), 0.0);
         }
@@ -372,7 +380,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         float v = position.y, a = aSpot.w * 6.2831;
         vec3 w = vec3(base.x, ground(base), base.y);
         w.xz += vec2(cos(a), sin(a)) * position.x * aSize.x;
-        w.y += v * aSize.y;
+        w.y += v * aSize.y * (1.0 - 0.95 * crag(base, w.y));  // only a few tufts on the bare rock
         w.xz += (vec2(aSpot.x * 0.12, 0.08) + vec2(0.0, sin(uTime * 1.7 + aSpot.w * 30.0) * 0.1)) * v * v * aSize.y * 2.0;
         vV = v;
         float j = fract(aSpot.w * 7.31);  // and each blade leans a little warmer or cooler than its patch
@@ -382,7 +390,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
       }`,
         fragmentShader: `uniform vec3 uReedA, uReedB, uFog; varying float vV, vFade; varying vec3 vCol;
       void main() {  // shaded at the root, catching the light at the tip
-        vec3 col = mix(mix(uReedA, vCol * 0.6, 0.6), mix(uReedB, vCol * 1.4, 0.75), vV);
+        vec3 col = mix(mix(uReedA, vCol * 0.6, 0.6), mix(uReedB, vCol * 1.15, 0.75), vV);
         gl_FragColor = vec4(mix(col, uFog, vFade), 1.0);
         #include <colorspace_fragment>
       }`,
@@ -397,7 +405,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
         return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
-    const rng = seeded(20260930);
+    let rng = seeded(20260930); // swapped out for scenery added later, so the earlier layout stays as it was
     world.add(new THREE.HemisphereLight(0xffffff, 0x445544, 1.0));
     const sunLight = new THREE.DirectionalLight(0xffffff, 1.1);
     sunLight.position.copy(uniforms.uLight.value).multiplyScalar(10);
@@ -486,6 +494,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         pine: ["#2f5a2c", "#3b6a32", "#2a4f2e", "#466f36", "#35603a", "#52783e"],
         maple: ["#a8321e", "#c2481f", "#d9692a", "#8f2a1c", "#b8551f", "#e08a3a"],
         ginkgo: ["#c9a73a", "#d8b84a", "#b8932e", "#e2c65a"],
+        jade: ["#3f8f78", "#4c9c82", "#2f7262", "#5a9f80", "#3a7a5c", "#56865a"], // the painting's teal canopies
     };
     const pick = <T,>(list: T[]) => list[Math.floor(rng() * list.length)];
     const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -599,6 +608,84 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         }
         decor.add(mesh);
     }
+
+    // ---- tall broadleaf trees with heavy, clustered canopies, standing back on the banks and framing the
+    // stream, like the trees overhanging a gorge in a landscape painting (their own seed: see rng)
+    const mainRng = rng;
+    rng = seeded(31337);
+    function tall(leaves: string[]) {
+        const parts: THREE.BufferGeometry[] = [], bark = pick(BARK);
+        const H = 3.4 + rng() * 1.8, lean = (rng() - 0.5) * 0.7;
+        const pts = [v(0, -0.2, 0), v(lean * 0.3 + (rng() - 0.5) * 0.25, H * 0.35, (rng() - 0.5) * 0.25),
+            v(lean * 0.7 + (rng() - 0.5) * 0.2, H * 0.7, (rng() - 0.5) * 0.25), v(lean, H, 0)];
+        const trunk = new THREE.CatmullRomCurve3(pts);
+        parts.push(limb(pts, 0.2, 0.06, bark, 18));
+        for (let r = 0; r < 5; r++) { // buttress roots
+            const a = (r / 5) * 6.28 + rng() * 0.6, len = 0.4 + rng() * 0.3;
+            parts.push(limb([v(0, 0.1, 0), v(Math.cos(a) * len * 0.5, 0, Math.sin(a) * len * 0.5), v(Math.cos(a) * len, -0.15, Math.sin(a) * len)], 0.09, 0.02, bark, 6));
+        }
+        const branches = 5 + Math.floor(rng() * 3);
+        for (let b = 0; b < branches; b++) {
+            const from = trunk.getPoint(0.45 + (b / branches) * 0.45), a = rng() * 6.28, len = 0.7 + rng() * 0.7;
+            const to = from.clone().add(v(Math.cos(a) * len, 0.3 + rng() * 0.5, Math.sin(a) * len));
+            parts.push(limb([from, from.clone().lerp(to, 0.5).add(v(0, -0.1, 0)), to], 0.07, 0.025, bark, 8));
+            pad(parts, to.add(v(0, 0.1, 0)), 0.55 + rng() * 0.35, leaves, 0.55);
+        }
+        pad(parts, trunk.getPoint(1).add(v(0, 0.2, 0)), 0.85 + rng() * 0.35, leaves, 0.55); // the crown
+        pad(parts, trunk.getPoint(0.85).add(v((rng() - 0.5) * 0.6, 0, (rng() - 0.5) * 0.6)), 0.7, leaves, 0.6);
+        return mergeGeometries(parts)!;
+    }
+    for (const geo of [tall(FOLIAGE.jade), tall(FOLIAGE.jade), tall(FOLIAGE.pine)]) {
+        const count = small ? 3 : 5, mesh = new THREE.InstancedMesh(geo, treeMat, count);
+        for (let i = 0; i < count; i++) {
+            let z = 0, side = 1, d = 0, cx = 0, w = 0;
+            do {
+                z = -2 - rng() * 42; side = rng() < 0.5 ? -1 : 1; d = 1.75 + rng() * 1.5;
+                [cx, w] = river(z);
+            } while (Math.hypot(cx + side * d * w - PAV_X, z - PAV_Z) < 3.5);
+            q.setFromAxisAngle(Y, rng() * 6.28);
+            const k = 0.85 + rng() * 0.35;
+            mesh.setMatrixAt(i, m4.compose(at.set(cx + side * d * w, bankHeight(1.4) - 0.05, z), q, sc.set(k, k * (0.9 + rng() * 0.2), k)));
+            const shade = 0.85 + rng() * 0.2;
+            mesh.setColorAt(i, tint.setRGB(shade * 0.97, shade, shade));
+        }
+        decor.add(mesh);
+    }
+
+    // ---- boulders and ledges along both waterlines: dark wet stone, moss on top, half in the water
+    const boulderMat = solid();
+    dimmed.push([boulderMat, 0.35]);
+    function boulder() {
+        const g = new THREE.IcosahedronGeometry(1, 1), pos = g.attributes.position, p = new THREE.Vector3(), colors: number[] = [];
+        const bumps = Array.from({ length: 4 }, () => [rng() * 6.28, rng() * 6.28, 1.5 + rng() * 2.5, 0.08 + rng() * 0.1]);
+        for (let k = 0; k < pos.count; k++) {
+            p.fromBufferAttribute(pos, k).normalize();
+            let s = 1;
+            for (const [a, b, n, amp] of bumps) s += amp * Math.sin(n * p.x + a) * Math.cos(n * p.z + b);
+            p.multiplyScalar(s);
+            if (p.y < 0) p.y *= 0.5;
+            pos.setXYZ(k, p.x, p.y, p.z);
+            const tone = 0.9 + rng() * 0.15;
+            if (p.y > 0.55) colors.push(0.3 * tone, 0.42 * tone, 0.3 * tone); // moss
+            else if (p.y < 0.05) colors.push(0.17 * tone, 0.19 * tone, 0.19 * tone); // wet
+            else colors.push(0.3 * tone, 0.3 * tone, 0.29 * tone); // ink-grey stone
+        }
+        g.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+        return g;
+    }
+    for (const geo of [boulder(), boulder(), boulder()]) {
+        const count = small ? 16 : 26, mesh = new THREE.InstancedMesh(geo, boulderMat, count);
+        for (let i = 0; i < count; i++) {
+            let z = 4 - rng() * 55;
+            if (Math.abs(z - BRIDGE_Z) < 1.2) z -= 2.5; // clear of the bridge's feet
+            const side = rng() < 0.5 ? -1 : 1, d = 0.92 + rng() * 0.28, [cx, w] = river(z), r = 0.35 + rng() * 0.6;
+            q.setFromAxisAngle(Y, rng() * 6.28);
+            mesh.setMatrixAt(i, m4.compose(at.set(cx + side * d * w, bankHeight(d) - 0.08, z), q,
+                sc.set(r * (1 + rng() * 0.8), r * (0.5 + rng() * 0.5), r * (0.8 + rng() * 0.6))));
+        }
+        decor.add(mesh);
+    }
+    rng = mainRng;
 
     // ---- stone lanterns on the banks: base, pillar, a lamp box that glows at night, a curved roof and a jewel
     const STONE = "#8d8a80";
@@ -926,8 +1013,8 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
             set("uDeep", accent); set("uShallow", accent.clone().lerp(c("#5fb3a0"), 0.6));
             set("uSky", bg.clone().lerp(accent, 0.25)); set("uSun", c("#ffffff").multiplyScalar(0.35));
             set("uBedA", c("#7c7a70")); set("uBedB", c("#5f5d55")); set("uGap", c("#3d3c36")); set("uCaustic", c("#cdeee4"));
-            set("uFoam", c("#eef6f2")); set("uGrassA", c("#3d6636")); set("uGrassB", c("#587c43")); set("uGrassC", c("#a9c24e")); set("uGrassD", c("#4a8f78")); set("uEarth", c("#4f4334"));
-            set("uFlower", c("#f4efd0")); set("uReedA", c("#2c4f2c")); set("uReedB", c("#6f9353"));
+            set("uFoam", c("#eef6f2")); set("uGrassA", c("#3d6636")); set("uGrassB", c("#587c43")); set("uGrassC", c("#879a58")); set("uGrassD", c("#3d7a68")); set("uEarth", c("#4f4334"));
+            set("uFlower", c("#f4efd0")); set("uReedA", c("#2c4f2c")); set("uReedB", c("#5f8150"));
             set("uRock", c("#858175")); u.uReflect.value = 0.35;
         }
         set("uFog", bg);
