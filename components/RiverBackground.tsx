@@ -831,6 +831,33 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
     });
     const up = new THREE.Vector3(0, 1, 0), normal = new THREE.Vector3(), tilt = new THREE.Quaternion(), yaw = new THREE.Quaternion();
 
+    // ---- clouds the camera climbs through between the two views: soft billows strewn round its path (draw
+    // places them and fades them in mid-climb, so neither view has any)
+    const puffTexture = (() => {
+        const c = document.createElement("canvas");
+        c.width = c.height = 128;
+        const g = c.getContext("2d")!;
+        for (let i = 0; i < 7; i++) { // a few soft blobs overlapping into one billow
+            const x = 64 + (Math.random() - 0.5) * 44, y = 64 + (Math.random() - 0.5) * 28, r = 18 + Math.random() * 16;
+            const grad = g.createRadialGradient(x, y, 0, x, y, r);
+            grad.addColorStop(0, "rgba(255,255,255,0.55)");
+            grad.addColorStop(1, "rgba(255,255,255,0)");
+            g.fillStyle = grad;
+            g.fillRect(0, 0, 128, 128);
+        }
+        const t = new THREE.CanvasTexture(c);
+        t.colorSpace = THREE.SRGBColorSpace;
+        return t;
+    })();
+    const cloudMat = new THREE.SpriteMaterial({ map: puffTexture, transparent: true, depthWrite: false, fog: false, opacity: 0 });
+    const clouds = Array.from({ length: small ? 26 : 44 }, () => {
+        const puff = new THREE.Sprite(cloudMat);
+        puff.userData = { u: Math.random(), x: Math.random() * 2 - 1, z: Math.random() * 2 - 1, size: 0.7 + Math.random() * 0.8 };
+        puff.renderOrder = 5;
+        world.add(puff);
+        return puff;
+    });
+
     // ---- colours: AquaPlot's teal water on this site's white (or near-black) page
     const fog = new THREE.Fog("#d9e0da", 8, 30);
     world.fog = fog;
@@ -859,6 +886,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         u.uNight.value = dark ? 1 : 0;
         for (const [mat, k] of dimmed) mat.color.setScalar(dark ? k : 1);
         lampMat.color.set(dark ? "#ffc27a" : "#e9dcc0");
+        cloudMat.color.set(dark ? "#3a4448" : "#ffffff");
         night = dark; // the lanterns' glow (draw)
         renderer.setClearColor(bg);
         if (!running) draw(0);
@@ -912,10 +940,10 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         // The river also meanders inside the channels, so it curves even beside a single row. The bends reach a
         // third of the way from the channel's middle to its edge, and the water narrows to fit beside them.
         const amp = typical * 0.17, TAU = Math.PI * 2;
+        const centre = (y: number) => centreAt(chans, y) + amp * (0.65 * Math.sin((y / 1100) * TAU) + 0.35 * Math.sin((y / 520) * TAU + 1.7));
         let room = Infinity;
         for (let i = 0; i < n; i++) {
-            const y = y0 + (i + 0.5) * step;
-            const c = centreAt(chans, y) + amp * (0.65 * Math.sin((y / 1100) * TAU) + 0.35 * Math.sin((y / 520) * TAU + 1.7));
+            const y = y0 + (i + 0.5) * step, c = centre(y);
             xs[i] = (c - W / 2) * wpp;
             for (const q of chans) if (y >= q.top && y <= q.bottom) room = Math.min(room, c - (q.c - q.h), q.c + q.h - c);
         }
@@ -932,6 +960,17 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         path = { n, xs, ws, z0: zOf(y0), dz: step * wpp };
         uniforms.uPath.value = pathTex;
         uniforms.uPathRange.value.set(path.z0, 1 / (n * path.dz));
+
+        // Each post's line runs level with its title to the middle of the river (app/blogs/timeline.css; 30 is
+        // its top there). Layout offsets, not getBoundingClientRect: a post may be mid drift-in, moved by a transform.
+        for (const el of flow.querySelectorAll<HTMLElement>(".river-row > .reveal")) {
+            const parent = (el.offsetParent as HTMLElement | null)?.getBoundingClientRect();
+            if (!parent) continue;
+            const left = parent.left + el.offsetLeft, right = left + el.offsetWidth, c = centre(parent.top + scrollY + el.offsetTop + 30);
+            const toRight = c > (left + right) / 2;
+            el.dataset.river = toRight ? "right" : "left";
+            el.style.setProperty("--reach", `${Math.round(Math.max(0, toRight ? c - right : left - c))}px`);
+        }
     }
 
     // ---- the camera: low down looking up the stream behind About me, leaning a little towards the pointer;
@@ -954,6 +993,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         const heroH = Math.max(hero.offsetHeight, 1);
         const p = clamp01(eased / heroH), e = ease(p), banks = ease(clamp01((p - 0.15) / 0.65)), gone = ease(clamp01((p - 0.05) / 0.5));
         pathMix = path ? ease(clamp01((p - 0.15) / 0.7)) : 0;
+        const haze = Math.sin(Math.PI * clamp01((p - 0.06) / 0.88)) ** 1.5; // 0 in either view, 1 mid-climb
         // locked to the page, not eased: the bends have to stay beside the posts they go round
         const zc = Math.max(0, scrollY - heroH) * wpp;
         const tall = camera.aspect < 1, heroFov = tall ? 55 : 44; // tall screens look further down, so the stream fills them
@@ -971,8 +1011,9 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
 
         const u = uniforms;
         u.uTime.value = t; u.uAnchor.value = zc; u.uPathMix.value = pathMix;
-        u.uFogNear.value = mix(8, topH * 2.5, e); u.uFogFar.value = mix(26, topH * 5, e);
-        fog.near = mix(8, topH * 2.5, e); fog.far = mix(30, topH * 5, e);
+        const thick = 1 - 0.75 * haze, thin = 1 - 0.55 * haze; // the mist closes in while the camera is in the clouds
+        u.uFogNear.value = mix(8, topH * 2.5, e) * thick; u.uFogFar.value = mix(26, topH * 5, e) * thin;
+        fog.near = mix(8, topH * 2.5, e) * thick; fog.far = mix(30, topH * 5, e) * thin;
         u.uBank.value.set(mix(3.5, 1.32, banks), mix(9, 1.72, banks));
         // From above the banks have faded to the page's colour a few units out, and the clear colour is that
         // colour too: no need to shade the land beyond them.
@@ -983,6 +1024,13 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         decor.visible = gone < 1;
         for (const m of decorMats) m.opacity = 1 - gone;
         glowMat.opacity = night ? 1 - gone : 0;
+        cloudMat.opacity = haze * 0.85;
+        cloudMat.visible = haze > 0.001;
+        for (const puff of clouds) { // each at its own height, beside where the camera is when it gets there
+            const d = puff.userData, y = mix(4, topH * 0.85, d.u), k = clamp01((y - 2.1) / (topH - 2.1)), spread = 3 + y * 0.5;
+            puff.position.set(d.x * spread, y, zc + 6.5 * (1 - k) - 4 * (1 - k) + d.z * spread);
+            puff.scale.setScalar((5 + y * 0.45) * d.size);
+        }
 
         // Rocks, koi and leaves live in a window round the camera, and scale with the river they sit in.
         const lo = zc + win[0], wrap = (z: number) => lo + ((((z - lo) % win[1]) + win[1]) % win[1]);
@@ -1064,26 +1112,76 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
             });
             pathTex?.dispose();
             blankPath.dispose();
+            puffTexture.dispose();
+            cloudMat.dispose();
             renderer.dispose();
         },
     };
 }
 
-// About me fades and lifts away as you scroll off the first screen (--hero-p, 0..1; app/blogs/timeline.css).
-// Separate from the scene, so it works without WebGL.
-function fadeHero(hero: HTMLElement) {
-    let queued = false;
+// The first screen and the way off it, separate from the scene so it works without WebGL. About me fades and
+// lifts away as you scroll (--hero-p, 0..1, on the page; app/blogs/timeline.css). Between the two views the camera is
+// mid-climb, which looks wrong to stop on, so My Blogs glides down to the river, and a scroll that comes to rest
+// partway is carried on, the way it was going, to About me or to the river. Any wheel, touch or key takes over.
+function heroScroll(hero: HTMLElement) {
+    const easeInOut = (k: number) => (k < 0.5 ? 4 * k * k * k : 1 - (-2 * k + 2) ** 3 / 2);
+    let queued = false, glide = 0, gliding = false, touching = false, lastY = scrollY, dir = 1, rest = 0;
+    function glideTo(to: number) {
+        cancelAnimationFrame(glide);
+        if (matchMedia("(prefers-reduced-motion: reduce)").matches) return scrollTo({ top: to, behavior: "instant" });
+        const from = scrollY, ms = 1000 + Math.min(1, Math.abs(to - from) / innerHeight) * 1200, t0 = performance.now();
+        gliding = true;
+        const step = (now: number) => {
+            const k = Math.min(1, (now - t0) / ms);
+            scrollTo({ top: from + (to - from) * easeInOut(k), behavior: "instant" });
+            if (k < 1) glide = requestAnimationFrame(step);
+            else gliding = false;
+        };
+        glide = requestAnimationFrame(step);
+    }
+    const takeOver = () => { cancelAnimationFrame(glide); gliding = false; };
+    function settle() {
+        const h = hero.offsetHeight;
+        if (gliding || touching || hero.querySelector("input, textarea")) return; // not while About me is being edited
+        if (scrollY > 2 && scrollY < h - 2) glideTo(dir > 0 ? h : 0);
+    }
+    const later = () => { clearTimeout(rest); rest = window.setTimeout(settle, 160); };
     const onScroll = () => {
+        dir = Math.sign(scrollY - lastY) || dir;
+        lastY = scrollY;
+        later();
         if (queued) return;
         queued = true;
         requestAnimationFrame(() => {
             queued = false;
-            hero.style.setProperty("--hero-p", clamp01(scrollY / Math.max(hero.offsetHeight, 1)).toFixed(4));
+            // on the page, not just the hero: the posts' lines use it too
+            (hero.parentElement ?? hero).style.setProperty("--hero-p", clamp01(scrollY / Math.max(hero.offsetHeight, 1)).toFixed(4));
         });
     };
+    const onTouch = (e: TouchEvent) => {
+        touching = e.type === "touchstart";
+        if (touching) takeOver();
+        else later();
+    };
+    const link = hero.querySelector<HTMLAnchorElement>('a[href="#river-flow"]');
+    const onLink = (e: MouseEvent) => { e.preventDefault(); glideTo(hero.offsetHeight); };
     addEventListener("scroll", onScroll, { passive: true });
+    addEventListener("wheel", takeOver, { passive: true });
+    addEventListener("keydown", takeOver);
+    addEventListener("touchstart", onTouch, { passive: true });
+    addEventListener("touchend", onTouch, { passive: true });
+    link?.addEventListener("click", onLink);
     onScroll();
-    return () => removeEventListener("scroll", onScroll);
+    return () => {
+        takeOver();
+        clearTimeout(rest);
+        removeEventListener("scroll", onScroll);
+        removeEventListener("wheel", takeOver);
+        removeEventListener("keydown", takeOver);
+        removeEventListener("touchstart", onTouch);
+        removeEventListener("touchend", onTouch);
+        link?.removeEventListener("click", onLink);
+    };
 }
 
 // Expects #river-hero and #river-flow on the page (app/blogs/page.tsx).
@@ -1095,11 +1193,11 @@ export default function RiverBackground() {
 
     useEffect(() => {
         const hero = document.getElementById("river-hero")!, flow = document.getElementById("river-flow")!;
-        const unfade = fadeHero(hero);
+        const unhero = heroScroll(hero);
         const s = start(canvas.current!, host.current!, hero, flow);
         scene.current = s;
         s?.start();
-        return () => { unfade(); s?.stop(); scene.current = null; };
+        return () => { unhero(); s?.stop(); scene.current = null; };
     }, []);
     useEffect(() => scene.current?.setDark(dark), [dark]);
 

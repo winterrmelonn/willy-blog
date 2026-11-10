@@ -1,5 +1,5 @@
 /* /blogs (app/blogs/page.tsx), after AquaPlot's about page. The first screen is About me over the stream,
-   fading as you scroll away (components/RiverBackground.tsx sets --hero-p, 0..1). Below it the posts come
+   fading as you scroll away (components/RiverBackground.tsx sets --hero-p, 0..1, on the page). Below it the posts come
    in pairs, one either side of the river: each row leaves a channel between its two columns (.ch), and the
    river is drawn down the channels, bending from one to the next. Rows lean left and right a little
    (--shift), which is what makes it wind; the shifts stay small because the river keeps one width all the
@@ -15,6 +15,19 @@
 .river-row > .a { grid-column: 1; grid-row: 1; }
 .river-row > .ch { grid-column: 2; grid-row: 1; align-self: stretch; }
 .river-row > .b { grid-column: 3; grid-row: 1; margin-top: 140px; }
+
+/* Each post's line to the river, ending in a red seal on the water: the timeline's marks. RiverBackground
+   measures where the river runs level with each title (--reach, data-river); until then, the channel's middle. */
+.river-row > .reveal { position: relative; --reach: calc(var(--ch) / 2); }
+/* They only line up with the river once the camera looks straight down, so they appear over the last of the climb. */
+.river-row > .reveal::before, .river-row > .reveal::after { content: ""; position: absolute; top: 30px; left: 100%; pointer-events: none;
+  opacity: clamp(0, (var(--hero-p, 1) - .85) * 6.67, 1); }
+.river-row > .reveal::before { width: var(--reach); height: 2px; margin-top: -1px; background: rgb(184 52 42 / .8); }
+.river-row > .reveal::after { width: 12px; height: 12px; margin: -6px 0 0 calc(var(--reach) - 6px); border-radius: 50%;
+                              background: #b8342a; box-shadow: 0 0 0 2px rgb(255 255 255 / .85); }
+.dark .river-row > .reveal::after { box-shadow: 0 0 0 2px rgb(0 0 0 / .7); }
+.river-row > .b::before, .river-row > .b::after { left: auto; right: 100%; }
+.river-row > .b::after { margin: -6px calc(var(--reach) - 6px) 0 0; }
 
 /* Each post drifts in towards the river as it scrolls into view. Scroll-driven, so it needs no script and
    nothing to remember; browsers without it just show the posts. */
@@ -34,7 +47,15 @@
   .river-row > .b { grid-column: 1; grid-row: 2; margin-top: 0; }
   .river-row > .ch { grid-row: 1 / span 2; }
   .river-row > .b { --from: -24px; }
+  .river-row > .reveal { --reach: calc((var(--ch-n) + var(--shift-n, 0px)) / 2); }
+  .river-row > .b::before, .river-row > .b::after { left: 100%; right: auto; }
+  .river-row > .b::after { margin: -6px 0 0 calc(var(--reach) - 6px); }
 }
+/* once measured, whichever side the river is on */
+.river-row > [data-river="right"]::before, .river-row > [data-river="right"]::after { left: 100%; right: auto; }
+.river-row > [data-river="right"]::after { margin: -6px 0 0 calc(var(--reach) - 6px); }
+.river-row > [data-river="left"]::before, .river-row > [data-river="left"]::after { left: auto; right: 100%; }
+.river-row > [data-river="left"]::after { margin: -6px calc(var(--reach) - 6px) 0 0; }
 @media (prefers-reduced-motion: reduce) {
   .river-flow .reveal { animation-name: river-fade; }
 }
