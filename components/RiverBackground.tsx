@@ -480,8 +480,42 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         const c = new THREE.Color(hex), n = out.attributes.position.count, col = new Float32Array(n * 3);
         for (let i = 0; i < n; i++) col.set([c.r, c.g, c.b], i * 3);
         out.setAttribute("color", new THREE.BufferAttribute(col, 3));
+        out.setAttribute("flutter", new THREE.BufferAttribute(new Float32Array(n), 1)); // still (leaves set 1: see clump)
         return out;
     };
+    // A clump of leaves, like the home page's trees rather than a solid lump: a small dim core, so it reads as
+    // dense, inside a cloud of pointed leaf cards at every angle, so its edge breaks up and light gets through.
+    // Leaves get their own random numbers, so the shapes and layout drawn from rng stay as they were.
+    const leafRng = seeded(424242), LEAVES = small ? 50 : 90;
+    const DIAMOND = [[-0.5, 0], [0, -0.22], [0.5, 0], [-0.5, 0], [0.5, 0], [0, 0.22]]; // two triangles
+    const eul = new THREE.Euler(), rot = new THREE.Matrix4(), corner = new THREE.Vector3(), facing = new THREE.Vector3();
+    function clump(at: THREE.Vector3, rx: number, ry: number, rz: number, base: THREE.Color) {
+        const core = painted(new THREE.IcosahedronGeometry(1, 1).scale(rx * 0.5, ry * 0.5, rz * 0.5).translate(at.x, at.y, at.z),
+            "#" + base.clone().multiplyScalar(0.5).getHexString());
+        const n = LEAVES * 6, pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), col = new Float32Array(n * 3);
+        const c = new THREE.Color();
+        for (let i = 0; i < LEAVES; i++) {
+            const u = leafRng() * 2 - 1, phi = leafRng() * 6.28, rad = Math.sqrt(1 - u * u), f = 0.5 + 0.5 * Math.sqrt(leafRng());
+            const cx = at.x + Math.cos(phi) * rad * rx * f, cy = at.y + u * ry * f, cz = at.z + Math.sin(phi) * rad * rz * f;
+            const size = Math.max(rx, rz) * (0.32 + leafRng() * 0.22);
+            rot.makeRotationFromEuler(eul.set(leafRng() * Math.PI, leafRng() * Math.PI, leafRng() * Math.PI));
+            facing.set(0, 0, 1).applyMatrix4(rot);
+            c.copy(base).multiplyScalar((0.82 + leafRng() * 0.32) * (0.88 + 0.22 * u)); // the upper leaves catch more light
+            DIAMOND.forEach(([x, y], k) => {
+                corner.set(x * size, y * size, 0).applyMatrix4(rot);
+                const j = (i * 6 + k) * 3;
+                pos.set([cx + corner.x, cy + corner.y, cz + corner.z], j);
+                nor.set([facing.x, facing.y, facing.z], j);
+                col.set([c.r, c.g, c.b], j);
+            });
+        }
+        const g = new THREE.BufferGeometry();
+        g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+        g.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
+        g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+        g.setAttribute("flutter", new THREE.BufferAttribute(new Float32Array(n).fill(1), 1));
+        return [core, g];
+    }
     // The low view's scenery (trees, lanterns, bridge, pavilion), faded out as the camera rises (draw).
     // Its materials are always transparent, so fading never recompiles a shader.
     const decor = new THREE.Group(), decorMats: THREE.Material[] = [];
@@ -526,10 +560,9 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         const lumps = 5 + Math.floor(rng() * 3);
         for (let k = 0; k < lumps; k++) {
             const a = rng() * 6.28, d = k ? r * (0.35 + rng() * 0.5) : 0, rr = r * (k ? 0.45 + rng() * 0.3 : 0.75);
-            const g = new THREE.IcosahedronGeometry(1, 1).scale(rr, rr * flat, rr)
-                .translate(at.x + Math.cos(a) * d, at.y + (k ? (rng() - 0.3) * r * 0.25 : r * 0.08), at.z + Math.sin(a) * d);
+            const centre = new THREE.Vector3(at.x + Math.cos(a) * d, at.y + (k ? (rng() - 0.3) * r * 0.25 : r * 0.08), at.z + Math.sin(a) * d);
             const col = new THREE.Color(pick(colors)).multiplyScalar(k ? 0.9 + rng() * 0.2 : 1.12);
-            parts.push(painted(g, "#" + col.getHexString()));
+            parts.push(...clump(centre, rr, rr * Math.max(flat, 0.45), rr, col));
         }
     }
     // style: how the trunk grows. upright (straight, tiered), informal (an S-curve), slant (leaning hard),
@@ -590,6 +623,12 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
     // where the pavilion stands (built further down): on the right bank upstream, beside the page's card
     const PAV_Z = -11, PAV_X = river(PAV_Z)[0] + 2.5 * river(PAV_Z)[1];
     const treeMat = solid();
+    treeMat.onBeforeCompile = (shader) => { // the leaves flutter in a light breeze, each tree out of step
+        shader.uniforms.uTime = uniforms.uTime;
+        shader.vertexShader = "uniform float uTime;\nattribute float flutter;\n" + shader.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>
+          float ph = uTime * 1.8 + dot(position, vec3(3.1, 2.3, 2.7)) + float(gl_InstanceID) * 2.4;
+          transformed += vec3(sin(ph), sin(ph * 1.3 + 1.0) * 0.6, cos(ph * 0.9)) * 0.02 * flutter;`);
+    };
     dimmed.push([treeMat, 0.3]);
     // [geometry, how many, nearest to the water (1 = the edge), how far back]
     const kinds: [THREE.BufferGeometry, number, number, number][] = [
@@ -701,8 +740,8 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         for (let k = 0; k < lumps; k++) {
             const a = rng() * 6.28, d = k ? 0.2 + rng() * 0.35 : 0, r = k ? 0.22 + rng() * 0.18 : 0.38;
             const y = k ? 0.12 + rng() * 0.25 - d * 0.25 : 0.3;
-            parts.push(painted(new THREE.IcosahedronGeometry(1, 1).scale(r, r * 0.8, r).translate(Math.cos(a) * d, y, Math.sin(a) * d),
-                "#" + new THREE.Color(pick(leaves)).multiplyScalar(0.85 + rng() * 0.25).getHexString()));
+            parts.push(...clump(new THREE.Vector3(Math.cos(a) * d, y, Math.sin(a) * d), r, r * 0.8, r,
+                new THREE.Color(pick(leaves)).multiplyScalar(0.85 + rng() * 0.25)));
         }
         for (let k = 0; flowers && k < 26; k++) { // blossoms dotted over the top
             const a = rng() * 6.28, d = rng() * 0.45, f = 0.045 + rng() * 0.03;
