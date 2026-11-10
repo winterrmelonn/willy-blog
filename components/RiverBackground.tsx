@@ -60,6 +60,16 @@ const COMMON = `
       return h;
     }
     float flowSpeed(vec2 p) { float a = across(p); return 0.25 + 1.5 * max(0.0, 1.0 - a * a); }`;
+// Patches of colour across the grass, shared by the banks and the blades standing on them, so the blades
+// match the ground they grow from: the two greens, sunny yellow-green and cool blue-green drifts, darker clumps.
+const MEADOW = `
+    uniform vec3 uGrassA, uGrassB, uGrassC, uGrassD;
+    vec3 meadow(vec2 p) {
+      vec3 g = mix(uGrassA, uGrassB, fbm(p * 0.8));
+      g = mix(g, uGrassC, smoothstep(0.42, 0.68, fbm(p * 0.45 + 5.3)));
+      g = mix(g, uGrassD, smoothstep(0.48, 0.72, fbm(p * 0.55 + 17.0)) * 0.9);
+      return g * mix(0.68, 1.08, smoothstep(0.25, 0.6, vnoise(p * 0.6 + 3.1)));
+    }`;
 // Fading into the page: by distance from the camera (haze), towards both ends of the world, and away from the river
 const FADE = `
     uniform float uFogNear, uFogFar, uAnchor; uniform vec2 uEdge, uBank, uWin;
@@ -140,7 +150,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         uDeep: { value: color() }, uShallow: { value: color() }, uSky: { value: color() }, uSun: { value: color() },
         uFog: { value: color() }, uFoam: { value: color() }, uCaustic: { value: color() },
         uBedA: { value: color() }, uBedB: { value: color() }, uGap: { value: color() },
-        uGrassA: { value: color() }, uGrassB: { value: color() }, uEarth: { value: color() }, uFlower: { value: color() },
+        uGrassA: { value: color() }, uGrassB: { value: color() }, uGrassC: { value: color() }, uGrassD: { value: color() }, uEarth: { value: color() }, uFlower: { value: color() },
         uReedA: { value: color() }, uReedB: { value: color() }, uRock: { value: color() },
         // A low sun upstream: its glitter lies on the far water, never in the reader's lap.
         uLight: { value: new THREE.Vector3(-0.3, 0.5, -1.0).normalize() },
@@ -180,9 +190,9 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         vWorld = w.xyz;
         gl_Position = projectionMatrix * viewMatrix * w;
       }`,
-        fragmentShader: `uniform float uTime, uNight; uniform vec3 uBedA, uBedB, uGap, uCaustic, uDeep, uFog, uGrassA, uGrassB, uEarth, uFlower, uLight;
+        fragmentShader: `uniform float uTime, uNight; uniform vec3 uBedA, uBedB, uGap, uCaustic, uDeep, uFog, uEarth, uFlower, uLight;
       varying vec3 vWorld; varying vec3 vN;
-      ${COMMON} ${FADE} ${VORONOI_GLSL} ${CAUSTIC_GLSL}
+      ${COMMON} ${MEADOW} ${FADE} ${VORONOI_GLSL} ${CAUSTIC_GLSL}
       void main() {
         vec2 p = vWorld.xz; float h = vWorld.y;
         float fade = max(fadeAt(vWorld), bankFade(p));
@@ -211,7 +221,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         }
         if (h > -0.03) {  // wet earth and stones at the edge, then grass
           float g = fbm(p * 0.8);
-          vec3 grass = mix(uGrassA, uGrassB, g) * (0.82 + 0.22 * vnoise(p * 7.0) + 0.14 * vnoise(vec2(p.x * 40.0, p.y * 9.0)));
+          vec3 grass = meadow(p) * (0.82 + 0.22 * vnoise(p * 7.0) + 0.14 * vnoise(vec2(p.x * 40.0, p.y * 9.0)));
           bank = mix(mix(uEarth, stone, pebble * 0.7), grass, smoothstep(0.1, 0.32, h + (g - 0.5) * 0.3));
           bank *= mix(0.7, 1.0, smoothstep(0.0, 0.16, h));
           bank *= 0.66 + 0.44 * max(dot(normalize(vN), uLight), 0.0);
@@ -329,28 +339,28 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
     motes.frustumCulled = false;
     world.add(motes);
 
-    // ---- reeds and long grass along both banks, swaying
+    // ---- long grass along both banks, thick near the water and thinning out, swaying
     const blade = new THREE.BufferGeometry();
     blade.setAttribute("position", new THREE.Float32BufferAttribute(
         [-1, 0, 0, 1, 0, 0, -0.72, 0.33, 0, 0.72, 0.33, 0, -0.42, 0.66, 0, 0.42, 0.66, 0, 0, 1, 0], 3));
     blade.setIndex([0, 1, 2, 1, 3, 2, 2, 3, 4, 3, 5, 4, 4, 5, 6]);
-    const REEDS = small ? 2200 : 4200;
+    const REEDS = small ? 7000 : 14000;
     const reedGeo = new THREE.InstancedBufferGeometry();
     reedGeo.index = blade.index;
     reedGeo.setAttribute("position", blade.getAttribute("position"));
     const spot = new Float32Array(REEDS * 4), size = new Float32Array(REEDS * 2);
     for (let i = 0; i < REEDS; i++) {
-        const out = Math.random() ** 2; // most of them close to the water
-        spot.set([Math.random() < 0.5 ? -1 : 1, 1.08 + out * 1.1, Math.random(), Math.random()], i * 4);
-        size.set([0.03 + Math.random() * 0.03, (0.3 + Math.random() * 0.45) * (1.25 - out * 0.6)], i * 2);
+        const out = Math.random() ** 1.6; // most of them close to the water
+        spot.set([Math.random() < 0.5 ? -1 : 1, 1.05 + out * 2.0, Math.random(), Math.random()], i * 4);
+        size.set([0.035 + Math.random() * 0.045, (0.35 + Math.random() * 0.5) * (1.25 - out * 0.5)], i * 2);
     }
     reedGeo.setAttribute("aSpot", new THREE.InstancedBufferAttribute(spot, 4));
     reedGeo.setAttribute("aSize", new THREE.InstancedBufferAttribute(size, 2));
     reedGeo.instanceCount = REEDS;
     const reeds = new THREE.Mesh(reedGeo, new THREE.ShaderMaterial({
         uniforms, side: THREE.DoubleSide,
-        vertexShader: `uniform float uTime; attribute vec4 aSpot; attribute vec2 aSize; varying float vV, vFade, vShade;
-      ${COMMON} ${FADE}
+        vertexShader: `uniform float uTime; attribute vec4 aSpot; attribute vec2 aSize; varying float vV, vFade; varying vec3 vCol;
+      ${COMMON} ${MEADOW} ${FADE}
       void main() {
         float z = wrapZ(aSpot.z * uWin.y);
         vec2 r = river(z);
@@ -360,13 +370,16 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         w.xz += vec2(cos(a), sin(a)) * position.x * aSize.x;
         w.y += v * aSize.y;
         w.xz += (vec2(aSpot.x * 0.12, 0.08) + vec2(0.0, sin(uTime * 1.7 + aSpot.w * 30.0) * 0.1)) * v * v * aSize.y * 2.0;
-        vV = v; vShade = 0.8 + 0.4 * fract(aSpot.w * 13.7);
+        vV = v;
+        float j = fract(aSpot.w * 7.31);  // and each blade leans a little warmer or cooler than its patch
+        vCol = mix(meadow(base), j < 0.5 ? uGrassC : uGrassD, 0.45 * fract(aSpot.w * 3.97)) * (0.8 + 0.4 * fract(aSpot.w * 13.7));
         vFade = max(fadeAt(w), bankFade(base));
         gl_Position = projectionMatrix * viewMatrix * vec4(w, 1.0);
       }`,
-        fragmentShader: `uniform vec3 uReedA, uReedB, uFog; varying float vV, vFade, vShade;
-      void main() {
-        gl_FragColor = vec4(mix(mix(uReedA, uReedB, vV) * vShade, uFog, vFade), 1.0);
+        fragmentShader: `uniform vec3 uReedA, uReedB, uFog; varying float vV, vFade; varying vec3 vCol;
+      void main() {  // shaded at the root, catching the light at the tip
+        vec3 col = mix(mix(uReedA, vCol * 0.6, 0.6), mix(uReedB, vCol * 1.4, 0.75), vV);
+        gl_FragColor = vec4(mix(col, uFog, vFade), 1.0);
         #include <colorspace_fragment>
       }`,
     }));
@@ -830,14 +843,14 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
             set("uDeep", c("#04201c")); set("uShallow", accent.clone().lerp(c("#0b3832"), 0.6));
             set("uSky", bg.clone().lerp(accent, 0.3)); set("uSun", c("#d9f6f8").multiplyScalar(0.22));
             set("uBedA", c("#3a4a4c")); set("uBedB", c("#5d5a4e")); set("uGap", c("#1a2426")); set("uCaustic", c("#8fe3ea"));
-            set("uFoam", c("#b9dfe3")); set("uGrassA", c("#1d2b22")); set("uGrassB", c("#2d3d2c")); set("uEarth", c("#2b2822"));
+            set("uFoam", c("#b9dfe3")); set("uGrassA", c("#1d2b22")); set("uGrassB", c("#2d3d2c")); set("uGrassC", c("#3b4622")); set("uGrassD", c("#1c3631")); set("uEarth", c("#2b2822"));
             set("uFlower", c("#6d7a5a")); set("uReedA", c("#1b281f")); set("uReedB", c("#4a6743"));
             set("uRock", c("#5b6466")); u.uReflect.value = 0.8;
         } else {
             set("uDeep", accent); set("uShallow", accent.clone().lerp(c("#5fb3a0"), 0.6));
             set("uSky", bg.clone().lerp(accent, 0.25)); set("uSun", c("#ffffff").multiplyScalar(0.35));
             set("uBedA", c("#7c7a70")); set("uBedB", c("#5f5d55")); set("uGap", c("#3d3c36")); set("uCaustic", c("#cdeee4"));
-            set("uFoam", c("#eef6f2")); set("uGrassA", c("#3d6636")); set("uGrassB", c("#587c43")); set("uEarth", c("#4f4334"));
+            set("uFoam", c("#eef6f2")); set("uGrassA", c("#3d6636")); set("uGrassB", c("#587c43")); set("uGrassC", c("#a9c24e")); set("uGrassD", c("#4a8f78")); set("uEarth", c("#4f4334"));
             set("uFlower", c("#f4efd0")); set("uReedA", c("#2c4f2c")); set("uReedB", c("#6f9353"));
             set("uRock", c("#858175")); u.uReflect.value = 0.35;
         }
@@ -896,9 +909,13 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         // First the centre line, then one width for the whole river: as wide as its tightest place beside the
         // posts allows. A river that narrows and swells round every bend looks pinched.
         const xs = new Float32Array(n), ws = new Float32Array(n), data = new Uint16Array(n * 2);
+        // The river also meanders inside the channels, so it curves even beside a single row. The bends reach a
+        // third of the way from the channel's middle to its edge, and the water narrows to fit beside them.
+        const amp = typical * 0.17, TAU = Math.PI * 2;
         let room = Infinity;
         for (let i = 0; i < n; i++) {
-            const y = y0 + (i + 0.5) * step, c = centreAt(chans, y);
+            const y = y0 + (i + 0.5) * step;
+            const c = centreAt(chans, y) + amp * (0.65 * Math.sin((y / 1100) * TAU) + 0.35 * Math.sin((y / 520) * TAU + 1.7));
             xs[i] = (c - W / 2) * wpp;
             for (const q of chans) if (y >= q.top && y <= q.bottom) room = Math.min(room, c - (q.c - q.h), q.c + q.h - c);
         }
