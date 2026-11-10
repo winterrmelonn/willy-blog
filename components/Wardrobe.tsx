@@ -245,6 +245,8 @@ const Plane = () => (
 const Split = ({ text, delay = 0 }: { text: string; delay?: number }) => (
     <>{[...text].map((c, i) => <span key={i} className="ch"><span style={{ animationDelay: `${delay + i * 40}ms` }}>{c === " " ? " " : c}</span></span>)}</>
 );
+// A quiet way back for anyone who opened this by mistake: a third line under the boot and login corner labels
+const Back = () => <Link href="/" className="back"><span aria-hidden>←</span> willy.work</Link>;
 const Brackets = () => <><i className="br a" /><i className="br b" /><i className="br c" /><i className="br d" /></>;
 const NoImg = ({ title = "No image" }: { title?: string }) => <div className="noimg mono"><b>{title}</b><span>ERR 404 — IMG_NULL</span></div>;
 const Arrow = () => <svg viewBox="0 0 16 16" aria-hidden><path d="M1 8h13M9 3l5 5-5 5" /></svg>;
@@ -252,7 +254,7 @@ const PlusIcon = () => <svg viewBox="0 0 16 16" aria-hidden><path d="M8 2v12M2 8
 
 /* ---------- the app ---------- */
 
-export default function Wardrobe({ className, initial }: { className: string; initial: { operator: string; items: Item[] } | null }) {
+export default function Wardrobe({ className, initial }: { className: string; initial: { operator: string; email: string; items: Item[] } | null }) {
     // render nothing on the server: the boot sequence, clock and canvas only make sense in the browser
     const mounted = useSyncExternalStore(noop, () => true, () => false);
     const clock = useClock();
@@ -264,6 +266,10 @@ export default function Wardrobe({ className, initial }: { className: string; in
     const [toasts, setToasts] = useState<{ id: number; msg: string; bye?: boolean }[]>([]);
 
     const [operator, setOperator] = useState(initial?.operator ?? "");
+    const initialEmail = useRef(initial?.email ?? "");
+    const [autoTyping, setAutoTyping] = useState(false);
+    const [pressed, setPressed] = useState(false);
+    const passRef = useRef<HTMLInputElement>(null);
     const hasSession = useRef(!!initial); // an admin was already signed in when the page loaded
     const [items, setItems] = useState<Item[]>(initial?.items ?? []);
 
@@ -326,10 +332,26 @@ export default function Wardrobe({ className, initial }: { className: string; in
         setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3000);
     }
 
+    // Already signed in on willy.work: "type" the account's email and a masked passkey into the form and press
+    // Authenticate, as if the system logged itself in. The passkey is filler dots, never a real password.
+    async function autoType() {
+        const fill = initialEmail.current;
+        setAutoTyping(true); setEmail(""); setPassword("");
+        emailRef.current?.focus({ preventScroll: true });
+        for (let i = 1; i <= fill.length; i++) { setEmail(fill.slice(0, i)); await sleep(35 + Math.random() * 45); }
+        await sleep(250);
+        passRef.current?.focus({ preventScroll: true });
+        for (let i = 1; i <= 12; i++) { setPassword("x".repeat(i)); await sleep(45 + Math.random() * 40); }
+        await sleep(300);
+        passRef.current?.blur();
+        setPressed(true); await sleep(380); setPressed(false);
+        setAutoTyping(false);
+    }
+
     async function showLogin() {
         setLoginRun((r) => r + 1);
         await go("login");
-        if (hasSession.current) { await sleep(1100); authenticate(null); } // already signed in: verify straight away
+        if (hasSession.current) { await sleep(1300); await autoType(); authenticate(null); } // already signed in: fill the form in, then verify
         else setTimeout(() => emailRef.current?.focus({ preventScroll: true }), 1300);
     }
 
@@ -530,8 +552,7 @@ export default function Wardrobe({ className, initial }: { className: string; in
             {/* ============ boot ============ */}
             <section className={scr("boot")} aria-label="Loading">
                 <PlusField spots={BOOT_PLUS} />
-                <div className="corner tl mono">RI-OS <b>0.3.0</b><br />Cold boot sequence</div>
-                <div className="corner tr mono">{clock.date}<br />Local</div>
+                <div className="corner tl mono">RI-OS <b>0.3.0</b> · {clock.date}<br />Cold boot sequence<br /><Back /></div>
                 <div className="corner bl mono">Heap <b>OK</b><br />Mem 0x00FF:A3C1</div>
                 <div className="corner br mono">Press any key to skip</div>
                 <div className="boot-wrap">
@@ -563,8 +584,8 @@ export default function Wardrobe({ className, initial }: { className: string; in
 
             {/* ============ login ============ */}
             <section className={scr("login")} aria-label="Sign in">
-                <div className="lg-left" aria-hidden>
-                    <div className="corner tl mono"><span className="sq" />&nbsp; Rudimentary Intelligence<br />Auth gate</div>
+                <div className="lg-left">
+                    <div className="corner tl mono"><span className="sq" />&nbsp; Rudimentary Intelligence<br />Auth gate<br /><Back /></div>
                     <div className="corner tr mono">{clock.time} Local</div>
                     <div className="corner bl mono">Uplink <b>willy.work</b><br />Clearance <b>Admin</b></div>
                 </div>
@@ -578,14 +599,14 @@ export default function Wardrobe({ className, initial }: { className: string; in
                         <p className="lg-p" data-in style={vars({ "--i": 5 })}>Sign in with your willy.work admin account.</p>
                         <label className="uf" data-in style={vars({ "--i": 6 })}>
                             <span>01 — Operator</span>
-                            <input ref={emailRef} type="email" required autoComplete="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                            <input ref={emailRef} readOnly={autoTyping} type="email" required autoComplete="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
                         </label>
                         <label className="uf" data-in style={vars({ "--i": 7 })}>
                             <span>02 — Passkey</span>
-                            <input type="password" required autoComplete="current-password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
+                            <input ref={passRef} readOnly={autoTyping} type="password" required autoComplete="current-password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} />
                         </label>
                         {authError && <p className="lg-err mono" role="alert">{"// "}{authError}</p>}
-                        <button className="btn solid" type="submit" disabled={verifying} data-in style={vars({ "--i": 8 })}><span>Authenticate</span><Arrow /></button>
+                        <button className={cls("btn solid", pressed && "pressed")} type="submit" disabled={verifying || autoTyping} data-in style={vars({ "--i": 8 })}><span>Authenticate</span><Arrow /></button>
                         <p className="mono dim" data-in style={vars({ "--i": 9 })}>{"// "}Admins only — same login as willy.work</p>
                     </form>
                     <div className="verify" aria-live="polite">

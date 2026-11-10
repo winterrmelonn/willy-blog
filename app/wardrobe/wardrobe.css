@@ -98,7 +98,8 @@
   & .btn { position: relative; overflow: hidden; isolation: isolate; display: inline-flex; align-items: center; justify-content: space-between; gap: 18px; background: none; border: 1px solid var(--line2); color: var(--text); padding: 14px 18px; font-family: var(--sans); font-weight: 500; font-size: 14px; cursor: pointer; white-space: nowrap; transition: color .4s, border-color .4s }
   & .btn::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--g); transform: scaleX(0); transform-origin: right; transition: transform .55s var(--ease) }
   & .btn:hover { color: #050505; border-color: var(--g) }
-  & .btn:hover::before { transform: scaleX(1); transform-origin: left }
+  & .btn:hover::before, & .btn.pressed::before { transform: scaleX(1); transform-origin: left }
+  & .btn.pressed { color: #050505; transform: translateY(1px) }
   & .btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; transition: transform .4s var(--ease) }
   & .btn:hover svg { transform: translateX(4px) }
   & .btn.solid { background: var(--g); border-color: var(--g); color: #050505 }
@@ -109,6 +110,11 @@
   & .btn:disabled { opacity: .5; cursor: wait }
   & .link { background: none; border: 0; color: var(--mute); font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; text-decoration: none; transition: color .3s }
   & .link:hover { color: var(--g) }
+  /* boot/login: "← willy.work" as a line of the top-left corner label, styled like it */
+  & .back { display: inline-flex; gap: 6px; color: inherit; text-decoration: none; transition: color .3s }
+  & .back span { display: inline-block; transition: transform .4s var(--ease) }
+  & .back:hover { color: var(--g) }
+  & .back:hover span { transform: translateX(-4px) }
   & .hero { font-family: var(--sans); font-weight: 500; letter-spacing: -.045em; line-height: .86; color: var(--text) }
 
   /* ---------- login (split) ---------- */
