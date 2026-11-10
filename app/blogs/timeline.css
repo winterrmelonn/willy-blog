@@ -4,7 +4,8 @@
    river is drawn down the channels, bending from one to the next. Rows lean left and right a little
    (--shift), which is what makes it wind; the shifts stay small because the river keeps one width all the
    way down. The right-hand post sits lower than the left, so the posts read as a zigzag timeline. */
-.river-hero { position: relative; min-height: 100svh; }
+/* About me sits at the bottom of the first screen, in the open water below the bridge */
+.river-hero { position: relative; min-height: 100svh; display: flex; flex-direction: column; justify-content: flex-end; padding-bottom: 10svh; }
 .river-hero > div { opacity: calc(1 - var(--hero-p, 0) * 1.6); transform: translate3d(0, calc(var(--hero-p, 0) * -90px), 0); }
 
 .river-flow { --ch: clamp(260px, 30vw, 460px); --ch-n: clamp(76px, 22vw, 210px);

@@ -19,6 +19,7 @@ const DEFAULT = {
 // how far each row of posts leans left or right, so the river between them winds (timeline.css)
 const SHIFTS = [["-2.5vw", "0px"], ["3vw", "2vw"], ["-3vw", "-1vw"], ["2.5vw", "1.5vw"]];
 const frost = "rounded-2xl bg-white/60 dark:bg-black/45 backdrop-blur-md";
+const pill = "inline-block rounded-full px-5 py-2 bg-black dark:bg-white text-white dark:text-black hover:opacity-80 [text-shadow:none]";
 
 // A bubble per post; the whole bubble opens the post (the title link stretches over it)
 function PostCard({ post, admin, side }: { post: PostType; admin: boolean; side: "a" | "b" }) {
@@ -57,11 +58,18 @@ export default async function Page() {
   return (
     <main className="relative flex-1">
       <section id="river-hero" className="river-hero">
-        {/* straight on the scene, with a soft glow behind the letters so they read over the water */}
-        <div className="max-w-2xl mt-6 mx-4 sm:mx-auto px-6 pb-6 pt-1 [text-shadow:0_0_2px_#fff,0_0_5px_#fff,0_0_10px_#fff,0_0_22px_rgb(255_255_255/.85)]
+        {/* down in the open water below the bridge (timeline.css), straight on the scene, with a soft glow behind
+            the letters so they read over it */}
+        <div className="max-w-2xl mx-4 sm:mx-auto sm:w-full px-6 pb-6 pt-1 [text-shadow:0_0_2px_#fff,0_0_5px_#fff,0_0_10px_#fff,0_0_22px_rgb(255_255_255/.85)]
           dark:[text-shadow:0_0_2px_#000,0_0_5px_#000,0_0_10px_#000,0_0_22px_rgb(0_0_0/.85)]">
           <AboutEditor title={saved?.title || DEFAULT.title} body={saved?.body ?? DEFAULT.body} admin={admin} />
-          <a href="#river-flow" className="mt-4 inline-block rounded-full px-5 py-2 bg-black dark:bg-white text-white dark:text-black hover:opacity-80 [text-shadow:none]">My Blogs</a>
+          <div className="mt-4 flex items-center gap-3">
+            <a href="#river-flow" className={pill}>My Blogs</a>
+            {admin && (<>
+              <span aria-hidden className="text-xl font-bold">·</span>
+              <Link href="/post" className={pill}>Post</Link>
+            </>)}
+          </div>
         </div>
       </section>
       <div id="river-flow" className="river-flow">
