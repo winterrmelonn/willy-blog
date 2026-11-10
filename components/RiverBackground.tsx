@@ -34,6 +34,10 @@ const mix = (a: number, b: number, k: number) => a + (b - a) * k;
 const heroRiver = (z: number) => [0.35 * Math.sin(z * 0.11) + 0.2 * Math.sin(z * 0.23 + 1.3), 3.0 + 0.2 * Math.sin(z * 0.07 + 2.0)];
 const smoothstep = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const bankHeight = (d: number) => { const k = smoothstep(0.95, 1.4, d); return (-1.05 + 0.7 * d * d) * (1 - k) + 0.42 * k; }; // d: 1 at the water's edge
+// Rolling hills rising behind the banks, beyond where the bankside trees stand (the shaders' hills() is the same
+// formula, so what's placed on them sits on the ground)
+const hills = (x: number, z: number) => Math.max(0, 1.5 + 0.8 * Math.sin(z * 0.19 + x * 0.07) + 0.5 * Math.sin(z * 0.43 - x * 0.13 + 1.7) + 0.3 * Math.sin(x * 0.31 + z * 0.11));
+const HILL_FROM = 3.4, HILL_FULL = 5.5; // across the stream (1 = the water's edge)
 const flowSpeed = (a: number) => 0.25 + 1.5 * Math.max(0, 1 - a * a);
 
 const COMMON = `
@@ -56,10 +60,14 @@ const COMMON = `
       return mix(hero, texture2D(uPath, vec2((z - uPathRange.x) * uPathRange.y, 0.5)).rg, uPathMix);
     }
     float across(vec2 p) { vec2 r = river(p.y); return (p.x - r.x) / r.y; }   // 0 mid-channel, 1 at the edge
-    float ground(vec2 p) {   // the bed, deepest in the middle, rising into the banks
+    float hills(vec2 p) {
+      return max(0.0, 1.5 + 0.8 * sin(p.y * 0.19 + p.x * 0.07) + 0.5 * sin(p.y * 0.43 - p.x * 0.13 + 1.7) + 0.3 * sin(p.x * 0.31 + p.y * 0.11));
+    }
+    float ground(vec2 p) {   // the bed, deepest in the middle, rising into the banks and then into hills
       float d = abs(across(p));
       float h = mix(-1.05 + 0.7 * d * d, 0.42, smoothstep(0.95, 1.4, d));
       h += (vnoise(p * 0.45) - 0.5) * 0.5 * smoothstep(1.3, 2.2, d);
+      h += smoothstep(${HILL_FROM.toFixed(2)}, ${HILL_FULL.toFixed(2)}, d) * hills(p);
       h += (vnoise(p * 2.3) - 0.5) * 0.07;
       return h;
     }
@@ -682,6 +690,49 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
             q.setFromAxisAngle(Y, rng() * 6.28);
             mesh.setMatrixAt(i, m4.compose(at.set(cx + side * d * w, bankHeight(d) - 0.08, z), q,
                 sc.set(r * (1 + rng() * 0.8), r * (0.5 + rng() * 0.5), r * (0.8 + rng() * 0.6))));
+        }
+        decor.add(mesh);
+    }
+
+    // ---- bushes on the banks and up the hills, and trees on the slopes, so the sides fall back in layers:
+    // round clumps of leaves in muted greens, some azaleas in flower
+    function bush(leaves: string[], flowers?: string[]) {
+        const parts: THREE.BufferGeometry[] = [], lumps = 7 + Math.floor(rng() * 5);
+        for (let k = 0; k < lumps; k++) {
+            const a = rng() * 6.28, d = k ? 0.2 + rng() * 0.35 : 0, r = k ? 0.22 + rng() * 0.18 : 0.38;
+            const y = k ? 0.12 + rng() * 0.25 - d * 0.25 : 0.3;
+            parts.push(painted(new THREE.IcosahedronGeometry(1, 1).scale(r, r * 0.8, r).translate(Math.cos(a) * d, y, Math.sin(a) * d),
+                "#" + new THREE.Color(pick(leaves)).multiplyScalar(0.85 + rng() * 0.25).getHexString()));
+        }
+        for (let k = 0; flowers && k < 26; k++) { // blossoms dotted over the top
+            const a = rng() * 6.28, d = rng() * 0.45, f = 0.045 + rng() * 0.03;
+            parts.push(painted(new THREE.IcosahedronGeometry(f, 0).translate(Math.cos(a) * d, 0.42 + (0.45 - d) * 0.35, Math.sin(a) * d), pick(flowers)));
+        }
+        return mergeGeometries(parts)!;
+    }
+    const SHRUB = ["#3f5f3a", "#4a6b40", "#35553a", "#56724a", "#3d6650"];
+    const groundAt = (x: number, z: number, d: number) => bankHeight(Math.min(d, 1.4)) + smoothstep(HILL_FROM, HILL_FULL, d) * hills(x, z);
+    // [geometry, how many, nearest (1 = the water's edge), how far back, how big]
+    const sides: [THREE.BufferGeometry, number, number, number, number][] = [
+        [bush(SHRUB), 22, 1.3, 2.0, 1], [bush(FOLIAGE.jade), 18, 1.3, 2.0, 1], [bush(SHRUB, ["#d9788a", "#e59aa8", "#c95f74"]), 12, 1.35, 1.9, 0.9],
+        [bush(SHRUB, ["#f1ece0", "#e6dcc8"]), 8, 1.35, 1.9, 0.9],
+        [bush(SHRUB), 26, HILL_FROM, 4.5, 1.6], [bush(FOLIAGE.jade), 22, HILL_FROM, 4.5, 1.6],
+        [tree("upright", FOLIAGE.pine, 0.3), 12, HILL_FROM + 0.4, 4.0, 1.5], [tree("windswept", FOLIAGE.pine), 8, HILL_FROM + 0.4, 4.0, 1.5],
+        [tall(FOLIAGE.jade), 8, HILL_FROM + 0.6, 4.0, 1.2],
+    ];
+    for (const [geo, n, near, spread, size] of sides) {
+        const count = Math.max(1, Math.round(n * (small ? 0.6 : 1))), mesh = new THREE.InstancedMesh(geo, treeMat, count);
+        for (let i = 0; i < count; i++) {
+            let z = 0, side = 1, d = 0, cx = 0, w = 0;
+            do { // anywhere on the sides, but leave the pavilion clear
+                z = 3 - rng() * 52; side = rng() < 0.5 ? -1 : 1; d = near + rng() * spread;
+                [cx, w] = river(z);
+            } while (Math.hypot(cx + side * d * w - PAV_X, z - PAV_Z) < 2.6);
+            const x = cx + side * d * w, k = size * (0.6 + rng() * 0.6);
+            q.setFromAxisAngle(Y, rng() * 6.28);
+            mesh.setMatrixAt(i, m4.compose(at.set(x, groundAt(x, z, d) - 0.2, z), q, sc.set(k, k * (0.8 + rng() * 0.4), k)));
+            const shade = 0.82 + rng() * 0.25;
+            mesh.setColorAt(i, tint.setRGB(shade * (0.96 + rng() * 0.06), shade, shade * (0.95 + rng() * 0.08)));
         }
         decor.add(mesh);
     }
