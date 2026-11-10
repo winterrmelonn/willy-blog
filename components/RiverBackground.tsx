@@ -21,6 +21,10 @@ import { useDarkMode } from "./darkmode";
 const LEN = 140; // length of the stretch of world kept around the camera
 const ROCKS = 14;
 const TOP_FOV = 30; // the camera's field of view looking straight down
+// The low view's reach: haze [near, far] for the shaders and for the lit objects (trees, koi...), where the world
+// fades out at either end [start, end], and the stretch of world reeds, rocks and koi live in [from, length]. Far
+// enough to see the rocks and bamboo deep upstream; the world strip (LEN) has to outlast EDGE.
+const HAZE = [14, 50], LIT_HAZE = [14, 58], EDGE = [58, 68], WIN = [-55, 75];
 const BRIDGE_Z = -0.5; // where the red bridge crosses, just ahead of the camera
 const f = (v: number) => v.toFixed(5);
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v)), ease = (v: number) => v * v * (3 - 2 * v);
@@ -142,9 +146,9 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
     const blankPath = new THREE.DataTexture(new Uint16Array(4), 2, 1, THREE.RGFormat, THREE.HalfFloatType);
     blankPath.needsUpdate = true;
     const uniforms: Record<string, THREE.IUniform> = {
-        uTime: { value: 0 }, uAnchor: { value: 0 }, uFogNear: { value: 8 }, uFogFar: { value: 26 },
-        uEdge: { value: new THREE.Vector2(38, 48) }, uBank: { value: new THREE.Vector2(3.5, 9) },
-        uWin: { value: new THREE.Vector2(-30, 48) },
+        uTime: { value: 0 }, uAnchor: { value: 0 }, uFogNear: { value: HAZE[0] }, uFogFar: { value: HAZE[1] },
+        uEdge: { value: new THREE.Vector2(EDGE[0], EDGE[1]) }, uBank: { value: new THREE.Vector2(3.5, 9) },
+        uWin: { value: new THREE.Vector2(WIN[0], WIN[1]) },
         uPath: { value: blankPath }, uPathRange: { value: new THREE.Vector2(0, 1) }, uPathMix: { value: 0 },
         uNight: { value: 0 }, uPointK: { value: 7 }, uDpr: { value: renderer.getPixelRatio() }, uReflect: { value: 0.8 }, uSpread: { value: 1 },
         uDeep: { value: color() }, uShallow: { value: color() }, uSky: { value: color() }, uSun: { value: color() },
@@ -344,7 +348,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
     blade.setAttribute("position", new THREE.Float32BufferAttribute(
         [-1, 0, 0, 1, 0, 0, -0.72, 0.33, 0, 0.72, 0.33, 0, -0.42, 0.66, 0, 0.42, 0.66, 0, 0, 1, 0], 3));
     blade.setIndex([0, 1, 2, 1, 3, 2, 2, 3, 4, 3, 5, 4, 4, 5, 6]);
-    const REEDS = small ? 7000 : 14000;
+    const REEDS = small ? 10000 : 20000;
     const reedGeo = new THREE.InstancedBufferGeometry();
     reedGeo.index = blade.index;
     reedGeo.setAttribute("position", blade.getAttribute("position"));
@@ -859,7 +863,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
     });
 
     // ---- colours: AquaPlot's teal water on this site's white (or near-black) page
-    const fog = new THREE.Fog("#d9e0da", 8, 30);
+    const fog = new THREE.Fog("#d9e0da", LIT_HAZE[0], LIT_HAZE[1]);
     world.fog = fog;
     let night = false;
     function setDark(dark: boolean) {
@@ -893,7 +897,7 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
     }
 
     // ---- reading the page: where the posts leave room for the river (AquaPlot's measure())
-    let wpp = 0.024, topH = 30, win = [-30, 48], pathTex: THREE.DataTexture | null = null;
+    let wpp = 0.024, topH = 30, win = WIN, pathTex: THREE.DataTexture | null = null;
     type Chan = { top: number; bottom: number; c: number; h: number };
     // The river's centre: alongside a row, the middle of the channel its posts leave free; between two rows,
     // a smooth bend from one channel to the next, begun a little before the first row ends and finished a
@@ -925,9 +929,9 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         wpp = across / W;
         topH = across / (2 * Math.tan(THREE.MathUtils.degToRad(TOP_FOV / 2)) * (W / H));
         const reach = (across * H) / W / 2; // world visible above and below the middle of the screen
-        win = [-Math.max(30, reach + 6), Math.max(30, reach + 6) + Math.max(18, reach + 6)];
+        win = [-Math.max(-WIN[0], reach + 6), Math.max(-WIN[0], reach + 6) + Math.max(WIN[1] + WIN[0], reach + 6)];
         uniforms.uWin.value.set(win[0], win[1]);
-        uniforms.uEdge.value.set(Math.max(38, reach + 5), Math.max(48, reach + 12));
+        uniforms.uEdge.value.set(Math.max(EDGE[0], reach + 5), Math.max(EDGE[1], reach + 12));
         if (!chans.length) { path = null; return; }
 
         // Page y to world z: the middle of the screen, once the first screen has scrolled away, is z = 0.
@@ -1002,8 +1006,8 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         lean.x += (lean.tx - lean.x) * Math.min(1, dt * 2.5);
         lean.y += (lean.ty - lean.y) * Math.min(1, dt * 2.5);
 
-        eye0.set(lean.x, 2.1 - lean.y, zc + 6.5);
-        q0.setFromRotationMatrix(m4.lookAt(eye0, aim.set(lean.x * 0.4, tall ? -2.6 : -1.3, zc - 4), up));
+        eye0.set(lean.x, 2.3 - lean.y, zc + 6.5); // gazing well up the stream, towards the far bends
+        q0.setFromRotationMatrix(m4.lookAt(eye0, aim.set(lean.x * 0.4, tall ? -1.9 : -0.7, zc - 4), up));
         eye1.set(0, topH, zc);
         q1.setFromRotationMatrix(m4.lookAt(eye1, aim.set(0, 0, zc), NORTH));
         camera.position.lerpVectors(eye0, eye1, e);
@@ -1014,8 +1018,8 @@ function start(canvas: HTMLCanvasElement, host: HTMLElement, hero: HTMLElement, 
         const u = uniforms;
         u.uTime.value = t; u.uAnchor.value = zc; u.uPathMix.value = pathMix;
         const thick = 1 - 0.75 * haze, thin = 1 - 0.55 * haze; // the mist closes in while the camera is in the clouds
-        u.uFogNear.value = mix(8, topH * 2.5, e) * thick; u.uFogFar.value = mix(26, topH * 5, e) * thin;
-        fog.near = mix(8, topH * 2.5, e) * thick; fog.far = mix(30, topH * 5, e) * thin;
+        u.uFogNear.value = mix(HAZE[0], topH * 2.5, e) * thick; u.uFogFar.value = mix(HAZE[1], topH * 5, e) * thin;
+        fog.near = mix(LIT_HAZE[0], topH * 2.5, e) * thick; fog.far = mix(LIT_HAZE[1], topH * 5, e) * thin;
         u.uBank.value.set(mix(3.5, 1.32, banks), mix(9, 1.72, banks));
         // From above the banks have faded to the page's colour a few units out, and the clear colour is that
         // colour too: no need to shade the land beyond them.

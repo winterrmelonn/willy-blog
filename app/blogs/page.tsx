@@ -58,15 +58,13 @@ export default async function Page() {
   return (
     <main className="relative flex-1">
       <section id="river-hero" className="river-hero">
-        {/* down in the open water below the bridge (timeline.css), straight on the scene, with a soft glow behind
-            the letters so they read over it */}
-        <div className="max-w-2xl mx-4 sm:mx-auto sm:w-full px-6 pb-6 pt-1 [text-shadow:0_0_2px_#fff,0_0_5px_#fff,0_0_10px_#fff,0_0_22px_rgb(255_255_255/.85)]
-          dark:[text-shadow:0_0_2px_#000,0_0_5px_#000,0_0_10px_#000,0_0_22px_rgb(0_0_0/.85)]">
+        {/* down in the open water below the bridge (timeline.css), centred */}
+        <div className="max-w-2xl mx-4 sm:mx-auto sm:w-full px-6 pb-6 pt-1 text-center">
           <AboutEditor title={saved?.title || DEFAULT.title} body={saved?.body ?? DEFAULT.body} admin={admin} />
-          <div className="mt-4 flex items-center gap-3">
+          <div className="mt-4 flex items-center justify-center gap-3">
             <a href="#river-flow" className={pill}>My Blogs</a>
             {admin && (<>
-              <span aria-hidden className="text-xl font-bold">·</span>
+              <span aria-hidden className="text-xl font-bold [text-shadow:0_0_6px_#fff] dark:[text-shadow:0_0_6px_#000]">·</span>
               <Link href="/post" className={pill}>Post</Link>
             </>)}
           </div>
