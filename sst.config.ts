@@ -32,6 +32,8 @@ export default $config({
         BETTER_AUTH_SECRET: authSecret.value,
         TODOIST_API_TOKEN: todoist.value,
       },
+      // read-only, for the admin Backend page's free-plan usage (components/Backend.tsx)
+      permissions: [{ actions: ["freetier:GetFreeTierUsage", "freetier:GetAccountPlanState"], resources: ["*"] }],
       // public/sat-bank only goes to admins (they get the cookie from /sat; see lib/satToken.ts)
       edge: { viewerRequest: { injection: authSecret.value.apply((s) => satGate(satToken(s))) } },
     });
