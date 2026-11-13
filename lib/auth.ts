@@ -12,6 +12,12 @@ export async function initAuth() {
         emailAndPassword: { enabled: true },
         // stay signed in on this browser for 30 days, renewed whenever you visit
         session: { expiresIn: 60 * 60 * 24 * 30, updateAge: 60 * 60 * 24 },
+        // Admin is decided by email and emails aren't verified, so nobody may sign up with an admin's email:
+        // otherwise whoever registers it first becomes an admin. To add an admin, have them sign up first,
+        // then put their email in ADMIN_EMAILS.
+        databaseHooks: {
+            user: { create: { before: async (user) => { if (ADMIN_EMAILS.includes(user.email.toLowerCase())) return false; } } },
+        },
 });
     
         return instance;

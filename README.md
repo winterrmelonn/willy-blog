@@ -59,6 +59,55 @@ with an email listed in `ADMIN_EMAILS` in `lib/auth.ts`.
 live address), plus `LASTIK_WOFF2_BASE64`: the font file in base64 (`base64 -i app/fonts/Lastik.woff2 | pbcopy`
 on a Mac). `scripts/font.mjs` writes the font from it before each build.
 
+**Deploying on AWS** (Lambda + CloudFront via [SST](https://sst.dev), all within AWS's always-free limits;
+`sst.config.ts` has the setup). It builds on your machine, so the font file just needs to be in `app/fonts/`.
+
+1. Install the [AWS CLI](https://aws.amazon.com/cli/) and sign in to the project (us-east-2) as the `willy` profile:
+   `aws login --region us-east-2 --profile willy`. The sign-in lasts 12 hours and renews for 90 days.
+   SST can't read `aws login` sessions directly, so `sst.config.ts` uses a `willy-sst` profile that borrows them.
+   Add it to `~/.aws/config` once:
+
+   ```ini
+   [profile willy-sst]
+   region = us-east-2
+   credential_process = aws configure export-credentials --profile willy --format process
+   ```
+2. In MongoDB Atlas → Network Access, allow `0.0.0.0/0` (Lambda has no fixed IP).
+3. Set the secrets once (`BetterAuthUrl` is the site's address; use a placeholder until the first deploy prints it):
+
+   ```bash
+   npx sst secret set MongoUri "mongodb+srv://..." --stage production
+   npx sst secret set BetterAuthSecret "$(openssl rand -base64 32)" --stage production
+   npx sst secret set BetterAuthUrl "https://placeholder.example" --stage production
+   npx sst secret set TodoistApiToken "..." --stage production   # optional
+   ```
+
+4. `npx sst deploy --stage production`. It prints the CloudFront `url`. Set `BetterAuthUrl` to it and deploy again.
+
+**Custom domain on Cloudflare DNS** (free; the domain itself is the only cost): `sst.config.ts` already serves
+the site at willy.work (www redirects to it). Every deploy needs a Cloudflare API token with *Zone → Zone → Read* and
+*Zone → DNS → Edit* for willy.work, plus your Cloudflare account ID, in the environment as `CLOUDFLARE_API_TOKEN`
+and `CLOUDFLARE_DEFAULT_ACCOUNT_ID` (keep them in `.env`, which is gitignored). SST creates the free AWS certificate
+and the DNS records itself, unproxied (grey cloud), so Cloudflare only answers DNS and CloudFront serves the site.
+`BetterAuthUrl` is `https://willy.work`.
+
+**Spending kill switch.** AWS has no spending cap, so `sst.config.ts` adds one: an AWS Budget of $10/month of real
+charges (credits don't count) that triggers `infra/kill-switch.ts`, which throttles the site's functions to 0 and
+disables CloudFront. The site goes offline instead of running up a bill. AWS updates billing data a few times a day,
+so it fires hours after the spike, not instantly. To bring the site back after fixing whatever caused it:
+
+```bash
+for f in $(aws lambda list-functions --profile willy --query "Functions[?starts_with(FunctionName, 'willy-blog-production-Site')].FunctionName" --output text); do aws lambda delete-function-concurrency --profile willy --function-name "$f"; done
+```
+
+then CloudFront console → the distribution → **Enable**. `sst deploy` doesn't undo either step.
+
+**SAT data on AWS.** `public/sat-bank` is served from S3, so CloudFront only gives it to browsers holding the `sat`
+cookie that `/sat` hands to admins (`lib/satToken.ts`). Locally (`npm run dev`) it isn't gated.
+
+Don't give a `public/` folder the same name as a page: on AWS, a path whose first part matches a `public/` folder is
+served from S3, so `public/sat` would hide `/sat` (that's why the SAT data is in `public/sat-bank`).
+
 Author's note / further details:
 
 willy.work is my personal blog/website. it started with, “i want to participate in stardance, but i don’t know what to make. i’ll follow the build your own blog guide because a personal website is a good thing to have.”
