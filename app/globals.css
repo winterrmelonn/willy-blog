@@ -74,3 +74,14 @@ body {
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(*), ::view-transition-new(*), ::view-transition-group(*) { animation-duration: 0s !important; animation-delay: 0s !important; }
 }
+
+/* Profile → Backend: the top bar slides up and the sidebar slides left, then the fullscreen page fades in */
+body > header, .profile-aside { transition: transform .35s ease, opacity .35s ease; }
+html[data-backend] body > header { transform: translateY(-100%); }
+html[data-backend] .profile-aside { transform: translateX(-100%); opacity: 0; }
+@keyframes backend-in { from { opacity: 0; transform: scale(.98); } }
+.backend-page { animation: backend-in .4s .3s ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  body > header, .profile-aside { transition: none; }
+  .backend-page { animation: none; }
+}

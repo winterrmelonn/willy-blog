@@ -8,6 +8,8 @@ import SignOutButton from "@/components/SignOutButton";
 import PostForm from "@/components/PostForm";
 import MessageForm from "@/components/MessageForm";
 import ReviewButtons from "@/components/ReviewButtons";
+import Backend from "@/components/Backend";
+import { BackendLink } from "@/components/BackendLink";
 import { requestBlog } from "./actions";
 
 const heading = "mt-10 mb-6 text-4xl font-bold";
@@ -46,16 +48,18 @@ export default async function Profile({ searchParams }: PageProps<"/profile">) {
   const admin = ADMIN_EMAILS.includes(session.user.email);
   // the sidebar's choices; ?tab= picks which one fills the main area
   const tabs = admin
-    ? [{ tab: "", label: "Home" }, { tab: "requests", label: "Blog requests" }]
+    ? [{ tab: "", label: "Home" }, { tab: "requests", label: "Blog requests" }, { tab: "backend", label: "Backend" }]
     : [{ tab: "", label: "Home" }, { tab: "contribute", label: "Contribute a blog" }, { tab: "message", label: "Send a message" }];
   const asked = (await searchParams).tab;
   const current = tabs.find((t) => t.tab === asked)?.tab ?? "";
 
   return (
     <main className="flex-1 flex flex-col sm:flex-row">
-      <aside className="sm:w-56 shrink-0 flex sm:flex-col gap-1 p-3 border-b sm:border-b-0 sm:border-r border-zinc-200 dark:border-zinc-800 overflow-x-auto">
-        {tabs.map((t) => (
-          <Link
+      <aside className="profile-aside sm:w-56 shrink-0 flex sm:flex-col gap-1 p-3 border-b sm:border-b-0 sm:border-r border-zinc-200 dark:border-zinc-800 overflow-x-auto">
+        {tabs.map((t) => {
+          const Tab = t.tab === "backend" ? BackendLink : Link;
+          return (
+          <Tab
             key={t.tab}
             href={t.tab ? `/profile?tab=${t.tab}` : "/profile"}
             aria-current={t.tab === current ? "page" : undefined}
@@ -64,8 +68,8 @@ export default async function Profile({ searchParams }: PageProps<"/profile">) {
               : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 dark:hover:bg-zinc-950 dark:hover:text-zinc-100"}`}
           >
             {t.label}
-          </Link>
-        ))}
+          </Tab>
+        ); })}
       </aside>
       <section className="flex-1 min-w-0 px-4 sm:px-10 pb-10">
         <div className="max-w-2xl mx-auto">
@@ -83,6 +87,7 @@ export default async function Profile({ searchParams }: PageProps<"/profile">) {
             <MessageForm />
           </>)}
           {current === "requests" && <BlogRequests />}
+          {current === "backend" && <Backend />}
         </div>
       </section>
     </main>
